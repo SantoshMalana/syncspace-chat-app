@@ -3,26 +3,25 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
 
-// Load env variables
 dotenv.config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// CORS - Allow your frontend domain
+app.use(cors({
+  origin: ['http://localhost:5173', 'https://syncspace.vercel.app'], // Add your Vercel URL later
+  credentials: true
+}));
+
 app.use(express.json());
 
 const authRoutes = require("./routes/authRoutes");
-
-// ⭐ CHANGED: Add /api prefix
 app.use("/api/auth", authRoutes);
 
-// Test Route
 app.get("/", (req, res) => {
   res.send("🚀 SyncSpace Backend is Running...");
 });
 
-// MongoDB Connection
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
@@ -32,7 +31,6 @@ mongoose
     console.error("❌ MongoDB Error:", err);
   });
 
-// Start Server
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
