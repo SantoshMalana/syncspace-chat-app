@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 // Types
@@ -47,7 +47,7 @@ interface MeetingRequest {
 const Dashboard = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(true);
-  const [currentUser, setCurrentUser] = useState<User>({
+  const [currentUser] = useState<User>({
     id: "1",
     fullName: "John Doe",
     email: "john@company.com",
@@ -55,7 +55,7 @@ const Dashboard = () => {
     status: "online",
   });
 
-  const [meetings, setMeetings] = useState<Meeting[]>([
+  const [meetings] = useState<Meeting[]>([
     {
       id: "1",
       title: "Sprint Planning Meeting",
@@ -78,7 +78,7 @@ const Dashboard = () => {
     },
   ]);
 
-  const [tasks, setTasks] = useState<Task[]>([
+  const [tasks] = useState<Task[]>([
     {
       id: "1",
       title: "Complete Q1 Report",
@@ -113,9 +113,9 @@ const Dashboard = () => {
     },
   ]);
 
-  const [showMeetingModal, setShowMeetingModal] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [_showMeetingModal, setShowMeetingModal] = useState(false);
+  const [_showRequestModal, setShowRequestModal] = useState(false);
+  const [_showTaskModal, setShowTaskModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "meetings" | "tasks" | "requests">("overview");
 
   // Toggle dark mode
