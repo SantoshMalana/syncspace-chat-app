@@ -9,9 +9,13 @@ const app = express();
 
 // CORS - Allow your frontend domain
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://syncspace.vercel.app', 'https://syncspace-frontend.vercel.app'], // Add your Vercel URL later
+  origin: [
+    "http://localhost:5173",
+    "https://syncspace-real-time-collaboration.vercel.app"
+  ],
   credentials: true
 }));
+
 
 app.use(express.json());
 
