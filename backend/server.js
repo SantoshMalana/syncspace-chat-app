@@ -11,10 +11,11 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
 const authRoutes = require("./routes/authRoutes");
 
-app.use("/auth", authRoutes);
-
+// ⭐ CHANGED: Add /api prefix
+app.use("/api/auth", authRoutes);
 
 // Test Route
 app.get("/", (req, res) => {

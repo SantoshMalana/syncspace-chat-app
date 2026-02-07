@@ -49,12 +49,36 @@ const Signup = () => {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // ⭐ UPDATED FUNCTION
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (validateForm()) {
-      console.log("Signup Data:", formData);
-      // TODO: Send to backend API
+      try {
+        // Call your backend API
+        const response = await fetch('http://localhost:5000/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          // Save token and user data
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          
+          // Redirect to dashboard
+          navigate('/dashboard');
+        } else {
+          // Show error message
+          alert(data.error || 'Signup failed');
+        }
+      } catch (error) {
+        console.error('Signup error:', error);
+        alert('Unable to connect to server. Please try again.');
+      }
     }
   };
 

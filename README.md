@@ -1,120 +1,134 @@
 🚀 SyncSpace — Real-Time Collaboration Platform
+📌 Project Overview
 
-📌 Project Overview  
-SyncSpace is a Slack-like collaboration application that enables teams to communicate in real-time through channels and direct messages.
+SyncSpace is a Slack-like real-time collaboration application that enables teams to communicate through channels and direct messages.
 
 The goal of this project is to build a functional, scalable, and user-friendly team communication platform within 18 days.
 
----
+👨‍💻 Developer
 
-👨‍💻 Developer  
-Name: Santosh  
-Course: Computer Science  
-Project Duration: 18 Days  
+Name: Santosh
 
----
+Course: Computer Science
 
-🚀 Tech Stack  
+Project Duration: 18 Days
 
-Frontend  
-- HTML  
-- CSS  
-- JavaScript  
-- TypeScript  
-- React  
-- Tailwind CSS  
+🚀 Tech Stack
+Frontend
 
-Backend  
-- Node.js  
-- Express.js  
+HTML
 
-Database  
-- MongoDB  
+CSS
 
-Realtime  
-- Socket.IO / WebSockets  
+JavaScript
 
----
+TypeScript
 
-🎯 Project Goals  
+React
 
-- Build a real-time chat system  
-- Implement secure authentication  
-- Support multiple channels  
-- Enable file sharing  
-- Provide responsive UI  
-- Deploy the application  
+Tailwind CSS
 
----
+Backend
 
-✅ Features Status  
+Node.js
 
-- ✔️ GitHub Repository Setup  
-- ✔️ README Documentation  
-- ✔️ Project Folder Structure  
-- ✔️ Backend Setup (Node + Express + MongoDB)  
-- ✔️ Authentication APIs (Register & Login)  
-- ✔️ Login UI  
-- ✔️ Signup UI  
-- ⏳ Channel Management  
-- ⏳ Real-Time Messaging  
-- ⏳ File Sharing  
-- ⏳ Notifications  
-- ⏳ User Status (Online/Offline)  
-- ⏳ Deployment  
+Express.js
 
----
+Database
 
-📊 Daily Progress Log  
+MongoDB
 
-| Day | Date       | Work Done                                      |
-|-----|------------|-----------------------------------------------|
-| 1   | 01-02-2026 | Project setup & GitHub connected              |
-| 2   | 02-02-2026 | Backend setup (Express + MongoDB + Auth APIs) |
-| 3   | 03-02-2026 | Login & Signup UI with React + Tailwind       |
+Realtime
 
----
+Socket.IO / WebSockets
 
-📁 Project Structure (Planned)
+🎯 Project Goals
 
-SyncSpace  
-├── backend  
-│   ├── config  
-│   ├── controllers  
-│   ├── models  
-│   ├── routes  
-│   ├── middleware  
-│   └── server.js  
-│  
-├── frontend  
-│   ├── src  
-│   │   ├── pages  
-│   │   │   ├── Login.tsx  
-│   │   │   ├── Signup.tsx  
-│   │   ├── components  
-│   │   ├── App.tsx  
-│   │   └── main.tsx  
-│   │  
-│   ├── public  
-│   ├── tailwind.config.cjs  
-│   ├── postcss.config.cjs  
-│   └── vite.config.ts  
-│  
-└── README.md  
+Build a real-time chat system
 
----
+Implement secure authentication
+
+Support multiple channels
+
+Enable file sharing
+
+Provide responsive UI
+
+Deploy the application
+
+✅ Features Status
+
+✔️ GitHub Repository Setup
+✔️ README Documentation
+✔️ Project Folder Structure
+✔️ Backend Setup (Node + Express + MongoDB)
+✔️ Authentication APIs (Register & Login)
+✔️ Login UI
+✔️ Signup UI
+✔️ Dashboard UI & Layout
+✔️ Protected Routes (Basic Setup)
+
+⏳ Channel Management
+⏳ Real-Time Messaging
+⏳ File Sharing
+⏳ Notifications
+⏳ User Status (Online/Offline)
+⏳ Deployment
+
+📊 Daily Progress Log
+Day	Date	Work Done
+1	01-02-2026	Project setup & GitHub connected
+2	02-02-2026	Backend setup (Express + MongoDB + Auth APIs)
+3	03-02-2026	Login & Signup UI with React + Tailwind
+4	04-02-2026	Authentication integration & testing
+5	05-02-2026	API optimization & frontend improvements
+6	06-02-2026	Dashboard UI design & implementation
+📁 Project Structure
+SyncSpace
+├── backend
+│   ├── config
+│   ├── controllers
+│   ├── models
+│   ├── routes
+│   ├── middleware
+│   └── server.js
+│
+├── frontend
+│   ├── src
+│   │   ├── pages
+│   │   │   ├── Login.tsx
+│   │   │   ├── Signup.tsx
+│   │   │   ├── Dashboard.tsx
+│   │   ├── components
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   │
+│   ├── public
+│   ├── tailwind.config.cjs
+│   ├── postcss.config.cjs
+│   └── vite.config.ts
+│
+└── README.md
 
 📈 Roadmap (Upcoming)
 
-- Connect frontend with backend authentication  
-- Implement JWT protected routes  
-- Build dashboard layout  
-- Add channels & messaging  
-- Integrate Socket.IO  
-- Add file upload system  
-- Deploy on Vercel + Render  
+Connect dashboard with real-time data
 
----
+Implement channel creation & management
 
-⭐ Note  
-This project is being developed as part of hands-on full-stack learning and will be continuously improved.
+Build messaging system
+
+Integrate Socket.IO
+
+Add file upload system
+
+Improve notification system
+
+Optimize performance
+
+Deploy on Vercel + Render
+
+⭐ Note
+
+This project is being developed as part of hands-on full-stack learning and is continuously evolving.
+Each day focuses on improving functionality, scalability, and user experience.

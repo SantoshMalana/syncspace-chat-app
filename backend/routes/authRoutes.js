@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 
-const { register } = require("../controllers/authController");
+const { register, login } = require("../controllers/authController");
 
-// Register Route
-router.post("/register", register);
+// ⭐ CHANGED: signup instead of register, and added login route
+router.post("/signup", register);
+router.post("/login", login);
 
 module.exports = router;
