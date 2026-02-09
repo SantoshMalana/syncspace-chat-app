@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 // ================= REGISTER/SIGNUP =================
 exports.register = async (req, res) => {
   try {
-    const { fullName, email, password, workspaceName } = req.body;
+    const { fullName, email, password } = req.body;
 
     // Check required fields
     if (!fullName || !email || !password) {
@@ -28,7 +28,6 @@ exports.register = async (req, res) => {
       fullName,
       email,
       password: hashedPassword,
-      workspaceName,
     });
 
     // Create token
@@ -45,7 +44,6 @@ exports.register = async (req, res) => {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
-        workspaceName: user.workspaceName,
       },
     });
 
@@ -93,7 +91,6 @@ exports.login = async (req, res) => {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
-        workspaceName: user.workspaceName,
       },
     });
 

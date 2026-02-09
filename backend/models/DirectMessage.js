@@ -33,9 +33,9 @@ const directMessageSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Ensure only 2 participants per DM
-directMessageSchema.pre('save', function(next) {
-  if (this.participants.length !== 2) {
+// Ensure only 2 participants per DM (only validate on new documents)
+directMessageSchema.pre('save', function (next) {
+  if (this.isNew && this.participants.length !== 2) {
     next(new Error('Direct message must have exactly 2 participants'));
   } else {
     next();

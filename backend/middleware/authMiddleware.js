@@ -22,8 +22,8 @@ exports.authenticate = async (req, res, next) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Attach user to request
-    req.user = user;
+    // Attach user to request (with both id and _id for compatibility)
+    req.user = { ...user.toObject(), id: user._id };
     next();
 
   } catch (error) {

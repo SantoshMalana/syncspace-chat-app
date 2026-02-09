@@ -52,4 +52,7 @@ const workspaceSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// Index for invite code with unique constraint
+workspaceSchema.index({ inviteCode: 1 }, { unique: true, sparse: true });
+
 module.exports = mongoose.model('Workspace', workspaceSchema);
