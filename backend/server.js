@@ -74,12 +74,14 @@ const workspaceRoutes = require('./routes/workspaceRoutes');
 const channelRoutes = require('./routes/channelRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const fixRoutes = require('./routes/fixRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/fix', fixRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
