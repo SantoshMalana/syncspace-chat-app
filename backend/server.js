@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
@@ -64,16 +65,21 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('Please check your MONGO_URI in .env file');
   });
 
+// Serve static files (uploads)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const workspaceRoutes = require('./routes/workspaceRoutes');
 const channelRoutes = require('./routes/channelRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -145,6 +151,18 @@ io.on('connection', (socket) => {
   socket.on('channel:leave', (channelId) => {
     socket.leave(`channel:${channelId}`);
     console.log(`User left channel: ${channelId}`);
+  });
+
+  // User joins a thread
+  socket.on('thread:join', (threadId) => {
+    socket.join(`thread:${threadId}`);
+    console.log(`User joined thread: ${threadId}`);
+  });
+
+  // User leaves a thread
+  socket.on('thread:leave', (threadId) => {
+    socket.leave(`thread:${threadId}`);
+    console.log(`User left thread: ${threadId}`);
   });
 
   // Typing indicator

@@ -17,4 +17,7 @@ router.put('/:messageId', authenticate, messageController.editMessage);
 router.delete('/:messageId', authenticate, messageController.deleteMessage);
 router.post('/:messageId/reaction', authenticate, messageController.addReaction);
 
+// Thread replies
+router.get('/thread/:messageId', authenticate, messageController.getThreadReplies);
+
 module.exports = router;

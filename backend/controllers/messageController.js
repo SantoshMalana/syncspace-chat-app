@@ -6,7 +6,7 @@ const User = require('../models/User');
 // Send message to channel
 exports.sendChannelMessage = async (req, res) => {
   try {
-    const { channelId, content, attachments, mentions } = req.body;
+    const { channelId, content, workspaceId, attachments, mentions, threadId } = req.body;
     const userId = req.user.id;
 
     // Verify channel exists and user is a member
@@ -19,15 +19,28 @@ exports.sendChannelMessage = async (req, res) => {
       return res.status(403).json({ error: 'Not a member of this channel' });
     }
 
+    // If replying to a thread, verify parent message exists
+    if (threadId) {
+      const parentMessage = await Message.findById(threadId);
+      if (!parentMessage) {
+        return res.status(404).json({ error: 'Parent message not found' });
+      }
+
+      // Increment reply count on parent message
+      parentMessage.replyCount += 1;
+      await parentMessage.save();
+    }
+
     // Create message
     const message = new Message({
       content,
       senderId: userId,
       channelId,
-      workspaceId: channel.workspaceId,
+      workspaceId: workspaceId || channel.workspaceId,
       messageType: 'channel',
       attachments: attachments || [],
       mentions: mentions || [],
+      threadId: threadId || null,
     });
 
     await message.save();
@@ -35,6 +48,23 @@ exports.sendChannelMessage = async (req, res) => {
     const populatedMessage = await Message.findById(message._id)
       .populate('senderId', 'fullName email avatar status')
       .populate('mentions', 'fullName email');
+
+    // Emit socket event for real-time message delivery
+    const io = req.app.get('io');
+    if (io) {
+      if (threadId) {
+        // Emit to thread room
+        io.to(`thread:${threadId}`).emit('thread:reply', populatedMessage);
+        // Also emit to channel to update reply count
+        io.to(`channel:${channelId}`).emit('message:updated', {
+          _id: threadId,
+          replyCount: (await Message.findById(threadId)).replyCount
+        });
+      } else {
+        // Regular channel message
+        io.to(`channel:${channelId}`).emit('message:new', populatedMessage);
+      }
+    }
 
     res.status(201).json({
       message: 'Message sent successfully',
@@ -128,7 +158,7 @@ exports.sendDirectMessage = async (req, res) => {
     // Update DM conversation
     dmConversation.lastMessage = message._id;
     dmConversation.lastMessageAt = new Date();
-    
+
     // Update unread count for recipient
     const recipientUnread = dmConversation.unreadCount.find(
       u => u.userId.toString() === recipientId
@@ -144,6 +174,12 @@ exports.sendDirectMessage = async (req, res) => {
     const populatedMessage = await Message.findById(message._id)
       .populate('senderId', 'fullName email avatar status')
       .populate('recipientId', 'fullName email avatar status');
+
+    // Emit socket event for real-time message delivery
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`channel:${channelId}`).emit('message:new', populatedMessage);
+    }
 
     res.status(201).json({
       message: 'Message sent successfully',
@@ -218,9 +254,9 @@ exports.getUserConversations = async (req, res) => {
       workspaceId,
       participants: userId,
     })
-    .populate('participants', 'fullName email avatar status')
-    .populate('lastMessage')
-    .sort({ lastMessageAt: -1 });
+      .populate('participants', 'fullName email avatar status')
+      .populate('lastMessage')
+      .sort({ lastMessageAt: -1 });
 
     res.status(200).json({ conversations });
 
@@ -256,6 +292,12 @@ exports.editMessage = async (req, res) => {
     const updatedMessage = await Message.findById(messageId)
       .populate('senderId', 'fullName email avatar status');
 
+    // Emit socket event for real-time update
+    const io = req.app.get('io');
+    if (io && message.channelId) {
+      io.to(`channel:${message.channelId}`).emit('message:updated', updatedMessage);
+    }
+
     res.status(200).json({
       message: 'Message updated successfully',
       data: updatedMessage,
@@ -286,6 +328,12 @@ exports.deleteMessage = async (req, res) => {
     message.isDeleted = true;
     message.content = '[Message deleted]';
     await message.save();
+
+    // Emit socket event for real-time deletion
+    const io = req.app.get('io');
+    if (io && message.channelId) {
+      io.to(`channel:${message.channelId}`).emit('message:deleted', { messageId });
+    }
 
     res.status(200).json({ message: 'Message deleted successfully' });
 
@@ -333,6 +381,15 @@ exports.addReaction = async (req, res) => {
       .populate('senderId', 'fullName email avatar status')
       .populate('reactions.userId', 'fullName');
 
+    // Emit socket event for real-time reaction update
+    const io = req.app.get('io');
+    if (io && message.channelId) {
+      io.to(`channel:${message.channelId}`).emit('reaction:updated', {
+        messageId,
+        reaction: updatedMessage.reactions,
+      });
+    }
+
     res.status(200).json({
       message: 'Reaction updated',
       data: updatedMessage,
@@ -341,5 +398,50 @@ exports.addReaction = async (req, res) => {
   } catch (error) {
     console.error('Add reaction error:', error);
     res.status(500).json({ error: 'Failed to add reaction' });
+  }
+};
+
+// Get thread replies
+exports.getThreadReplies = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { limit = 50 } = req.query;
+    const userId = req.user.id;
+
+    // Verify parent message exists
+    const parentMessage = await Message.findById(messageId)
+      .populate('senderId', 'fullName email avatar status');
+
+    if (!parentMessage) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Verify user has access to the channel
+    if (parentMessage.channelId) {
+      const channel = await Channel.findById(parentMessage.channelId);
+      if (!channel || !channel.members.includes(userId)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // Get thread replies
+    const replies = await Message.find({
+      threadId: messageId,
+      isDeleted: false,
+    })
+      .populate('senderId', 'fullName email avatar status')
+      .populate('mentions', 'fullName email')
+      .sort({ createdAt: 1 })
+      .limit(parseInt(limit));
+
+    res.status(200).json({
+      parentMessage,
+      replies,
+      totalReplies: parentMessage.replyCount,
+    });
+
+  } catch (error) {
+    console.error('Get thread replies error:', error);
+    res.status(500).json({ error: 'Failed to fetch thread replies' });
   }
 };

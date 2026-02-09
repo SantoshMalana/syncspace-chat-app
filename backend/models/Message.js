@@ -49,6 +49,10 @@ const messageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Message',
   },
+  replyCount: {
+    type: Number,
+    default: 0,
+  },
   isEdited: {
     type: Boolean,
     default: false,
@@ -72,5 +76,6 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ channelId: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
 messageSchema.index({ workspaceId: 1, createdAt: -1 });
+messageSchema.index({ threadId: 1, createdAt: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);
