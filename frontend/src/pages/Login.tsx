@@ -9,7 +9,7 @@ const Login = () => {
   // ⭐ UPDATED FUNCTION
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       // Call your backend API
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
@@ -17,14 +17,14 @@ const Login = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
         // Save token and user data
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        
+
         // Redirect to dashboard
         navigate('/dashboard');
       } else {
@@ -39,14 +39,14 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex bg-bg">
-      
+
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 relative overflow-hidden">
-        
+
         {/* Animated Background Elements */}
         <div className="absolute top-20 left-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-secondary/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        
+
         <div className="relative z-10 flex flex-col justify-center px-16 max-w-xl">
           <div className="mb-8">
             <h1 className="text-6xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent mb-4">
@@ -55,7 +55,7 @@ const Login = () => {
             <p className="text-2xl text-gray-300 font-light leading-relaxed">
               Where teams come together to make work happen
             </p>
-          </div>          
+          </div>
           <div className="space-y-6 text-gray-400">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0 mt-1">
@@ -68,7 +68,7 @@ const Login = () => {
                 <p className="text-sm">Connect with your team instantly through channels and direct messages</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center flex-shrink-0 mt-1">
                 <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,7 +80,7 @@ const Login = () => {
                 <p className="text-sm">Keep all your conversations, files, and tools in one searchable place</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0 mt-1">
                 <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,7 +99,7 @@ const Login = () => {
       {/* Right Side - Login Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
-          
+
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">
@@ -110,7 +110,7 @@ const Login = () => {
 
           {/* Login Card */}
           <div className="bg-card/50 backdrop-blur-sm p-8 rounded-2xl border border-gray-800/50 shadow-2xl">
-            
+
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-white mb-2">
                 Welcome back
@@ -197,8 +197,8 @@ const Login = () => {
               <p className="text-gray-400 text-sm">
                 Don't have an account?{" "}
                 <button onClick={() => navigate("/signup")}
-                className="text-accent hover:text-accent/80 font-semibold transition-colors">
-                Create a workspace
+                  className="text-accent hover:text-accent/80 font-semibold transition-colors">
+                  Create a workspace
                 </button>
               </p>
             </div>

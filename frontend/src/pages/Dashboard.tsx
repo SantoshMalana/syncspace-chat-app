@@ -170,10 +170,10 @@ const Dashboard = () => {
   return (
     <div className={`min-h-screen ${darkMode ? "dark bg-[#0f0f0f]" : "bg-gray-50"}`}>
       <div className="flex h-screen">
-        
+
         {/* Sidebar */}
         <aside className={`w-64 ${darkMode ? "bg-[#141414] border-[#1f1f1f]" : "bg-white border-gray-200"} border-r flex flex-col`}>
-          
+
           {/* Logo */}
           <div className={`p-6 ${darkMode ? "border-[#1f1f1f]" : "border-gray-200"} border-b`}>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -188,15 +188,14 @@ const Dashboard = () => {
           <nav className="flex-1 p-4 space-y-1">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === "overview"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === "overview"
                   ? darkMode
                     ? "bg-primary/10 text-primary"
                     : "bg-primary/10 text-primary"
                   : darkMode
-                  ? "text-gray-400 hover:bg-[#1a1a1a]"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+                    ? "text-gray-400 hover:bg-[#1a1a1a]"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -206,15 +205,14 @@ const Dashboard = () => {
 
             <button
               onClick={() => setActiveTab("meetings")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === "meetings"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === "meetings"
                   ? darkMode
                     ? "bg-primary/10 text-primary"
                     : "bg-primary/10 text-primary"
                   : darkMode
-                  ? "text-gray-400 hover:bg-[#1a1a1a]"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+                    ? "text-gray-400 hover:bg-[#1a1a1a]"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -229,15 +227,14 @@ const Dashboard = () => {
 
             <button
               onClick={() => setActiveTab("tasks")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                activeTab === "tasks"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === "tasks"
                   ? darkMode
                     ? "bg-primary/10 text-primary"
                     : "bg-primary/10 text-primary"
                   : darkMode
-                  ? "text-gray-400 hover:bg-[#1a1a1a]"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+                    ? "text-gray-400 hover:bg-[#1a1a1a]"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -253,15 +250,14 @@ const Dashboard = () => {
             {currentUser.role === "admin" && (
               <button
                 onClick={() => setActiveTab("requests")}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  activeTab === "requests"
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === "requests"
                     ? darkMode
                       ? "bg-primary/10 text-primary"
                       : "bg-primary/10 text-primary"
                     : darkMode
-                    ? "text-gray-400 hover:bg-[#1a1a1a]"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
+                      ? "text-gray-400 hover:bg-[#1a1a1a]"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -278,9 +274,8 @@ const Dashboard = () => {
             <div className={`my-4 border-t ${darkMode ? "border-[#1f1f1f]" : "border-gray-200"}`}></div>
 
             <button
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                darkMode ? "text-gray-400 hover:bg-[#1a1a1a]" : "text-gray-600 hover:bg-gray-100"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${darkMode ? "text-gray-400 hover:bg-[#1a1a1a]" : "text-gray-600 hover:bg-gray-100"
+                }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -307,11 +302,10 @@ const Dashboard = () => {
             </div>
             <button
               onClick={handleLogout}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                darkMode
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${darkMode
                   ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
                   : "bg-red-50 text-red-600 hover:bg-red-100"
-              }`}
+                }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -323,7 +317,7 @@ const Dashboard = () => {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          
+
           {/* Header */}
           <header className={`${darkMode ? "bg-[#0a0a0a] border-[#1f1f1f]" : "bg-white border-gray-200"} border-b px-8 py-4 flex items-center justify-between`}>
             <div>
@@ -347,9 +341,8 @@ const Dashboard = () => {
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className={`p-2 rounded-lg transition-all ${
-                  darkMode ? "bg-[#1a1a1a] text-gray-400 hover:text-gray-200" : "bg-gray-100 text-gray-600 hover:text-gray-900"
-                }`}
+                className={`p-2 rounded-lg transition-all ${darkMode ? "bg-[#1a1a1a] text-gray-400 hover:text-gray-200" : "bg-gray-100 text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 {darkMode ? (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -363,9 +356,8 @@ const Dashboard = () => {
               </button>
 
               {/* Notifications */}
-              <button className={`p-2 rounded-lg transition-all relative ${
-                darkMode ? "bg-[#1a1a1a] text-gray-400 hover:text-gray-200" : "bg-gray-100 text-gray-600 hover:text-gray-900"
-              }`}>
+              <button className={`p-2 rounded-lg transition-all relative ${darkMode ? "bg-[#1a1a1a] text-gray-400 hover:text-gray-200" : "bg-gray-100 text-gray-600 hover:text-gray-900"
+                }`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
@@ -376,11 +368,11 @@ const Dashboard = () => {
 
           {/* Content Area */}
           <div className={`flex-1 overflow-y-auto p-8 ${darkMode ? "bg-[#0f0f0f]" : "bg-gray-50"}`}>
-            
+
             {/* Overview Tab */}
             {activeTab === "overview" && (
               <div className="space-y-6">
-                
+
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className={`${darkMode ? "bg-[#141414] border-[#1f1f1f]" : "bg-white border-gray-200"} border rounded-xl p-6`}>
@@ -444,7 +436,7 @@ const Dashboard = () => {
 
                 {/* Two Column Layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  
+
                   {/* Upcoming Meetings */}
                   <div className={`${darkMode ? "bg-[#141414] border-[#1f1f1f]" : "bg-white border-gray-200"} border rounded-xl p-6`}>
                     <div className="flex items-center justify-between mb-6">
@@ -522,13 +514,12 @@ const Dashboard = () => {
                               <h4 className={`font-semibold ${darkMode ? "text-gray-100" : "text-gray-900"}`}>
                                 {task.title}
                               </h4>
-                              <span className={`text-xs px-2 py-1 rounded ${
-                                task.priority === "high"
+                              <span className={`text-xs px-2 py-1 rounded ${task.priority === "high"
                                   ? "bg-red-500/10 text-red-500"
                                   : task.priority === "medium"
-                                  ? "bg-yellow-500/10 text-yellow-500"
-                                  : "bg-green-500/10 text-green-500"
-                              }`}>
+                                    ? "bg-yellow-500/10 text-yellow-500"
+                                    : "bg-green-500/10 text-green-500"
+                                }`}>
                                 {task.priority}
                               </span>
                             </div>
@@ -539,11 +530,10 @@ const Dashboard = () => {
                               <span className={darkMode ? "text-gray-500" : "text-gray-600"}>
                                 Due: {formatDate(task.deadline)}
                               </span>
-                              <span className={`px-2 py-1 rounded ${
-                                task.status === "in-progress"
+                              <span className={`px-2 py-1 rounded ${task.status === "in-progress"
                                   ? darkMode ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600"
                                   : darkMode ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-600"
-                              }`}>
+                                }`}>
                                 {task.status}
                               </span>
                             </div>
@@ -600,13 +590,12 @@ const Dashboard = () => {
                             {meeting.description}
                           </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                          meeting.status === "upcoming"
+                        <span className={`px-3 py-1 rounded-lg text-sm font-medium ${meeting.status === "upcoming"
                             ? "bg-blue-500/10 text-blue-500"
                             : meeting.status === "ongoing"
-                            ? "bg-green-500/10 text-green-500"
-                            : "bg-gray-500/10 text-gray-500"
-                        }`}>
+                              ? "bg-green-500/10 text-green-500"
+                              : "bg-gray-500/10 text-gray-500"
+                          }`}>
                           {meeting.status}
                         </span>
                       </div>
@@ -691,13 +680,12 @@ const Dashboard = () => {
                             <h4 className={`text-lg font-semibold ${darkMode ? "text-gray-100" : "text-gray-900"}`}>
                               {task.title}
                             </h4>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              task.priority === "high"
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${task.priority === "high"
                                 ? "bg-red-500/10 text-red-500"
                                 : task.priority === "medium"
-                                ? "bg-yellow-500/10 text-yellow-500"
-                                : "bg-green-500/10 text-green-500"
-                            }`}>
+                                  ? "bg-yellow-500/10 text-yellow-500"
+                                  : "bg-green-500/10 text-green-500"
+                              }`}>
                               {task.priority}
                             </span>
                           </div>
@@ -705,13 +693,12 @@ const Dashboard = () => {
                             {task.description}
                           </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-lg text-sm font-medium whitespace-nowrap ml-4 ${
-                          task.status === "completed"
+                        <span className={`px-3 py-1 rounded-lg text-sm font-medium whitespace-nowrap ml-4 ${task.status === "completed"
                             ? "bg-green-500/10 text-green-500"
                             : task.status === "in-progress"
-                            ? "bg-blue-500/10 text-blue-500"
-                            : "bg-gray-500/10 text-gray-500"
-                        }`}>
+                              ? "bg-blue-500/10 text-blue-500"
+                              : "bg-gray-500/10 text-gray-500"
+                          }`}>
                           {task.status}
                         </span>
                       </div>
@@ -771,13 +758,12 @@ const Dashboard = () => {
                             <h4 className={`text-lg font-semibold ${darkMode ? "text-gray-100" : "text-gray-900"}`}>
                               Meeting Request from {request.requestedBy}
                             </h4>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              request.status === "pending"
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${request.status === "pending"
                                 ? "bg-yellow-500/10 text-yellow-500"
                                 : request.status === "approved"
-                                ? "bg-green-500/10 text-green-500"
-                                : "bg-red-500/10 text-red-500"
-                            }`}>
+                                  ? "bg-green-500/10 text-green-500"
+                                  : "bg-red-500/10 text-red-500"
+                              }`}>
                               {request.status}
                             </span>
                           </div>
@@ -822,11 +808,10 @@ const Dashboard = () => {
                                 r.id === request.id ? { ...r, status: "rejected" } : r
                               ));
                             }}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                              darkMode
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${darkMode
                                 ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
                                 : "bg-red-50 text-red-600 hover:bg-red-100"
-                            }`}
+                              }`}
                           >
                             Reject
                           </button>
@@ -844,7 +829,7 @@ const Dashboard = () => {
 
       {/* Modals would go here - simplified for brevity */}
       {/* You can add full modal implementations for creating meetings, tasks, and requests */}
-      
+
     </div>
   );
 };
