@@ -14,9 +14,34 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  workspaceName: {
+  avatar: {
     type: String,
-    required: false,
+    default: "",
+  },
+  status: {
+    type: String,
+    enum: ['online', 'away', 'busy', 'offline'],
+    default: 'offline',
+  },
+  statusMessage: {
+    type: String,
+    default: "",
+  },
+  workspaces: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Workspace',
+  }],
+  currentWorkspace: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Workspace',
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now,
+  },
+  timezone: {
+    type: String,
+    default: 'UTC',
   },
 }, {
   timestamps: true,

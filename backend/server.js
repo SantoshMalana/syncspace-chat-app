@@ -2,32 +2,53 @@ const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 
 // Load environment variables
 dotenv.config();
 
 // Initialize Express app
 const app = express();
+const server = http.createServer(app);
+
+// Socket.io setup
+const io = new Server(server, {
+  cors: {
+    origin: function (origin, callback) {
+      const allowedOrigins = [
+        process.env.CLIENT_URL || 'https://syncspace-realtime-collaboration-pl.vercel.app',
+        'http://localhost:5173',
+        'http://localhost:3000'
+      ];
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
+    credentials: true,
+  },
+});
 
 // Middleware
-app.use(express.json()); // Parse JSON request bodies
+app.use(express.json());
 
 // CORS Configuration
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
     const allowedOrigins = [
       process.env.CLIENT_URL || 'https://syncspace-realtime-collaboration-pl.vercel.app',
-      'http://localhost:5173', // for local development
-      'http://localhost:3000'  // alternative local port
+      'http://localhost:5173',
+      'http://localhost:3000'
     ];
 
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(null, true); // Temporarily allow all for testing
+      callback(null, true);
     }
   },
   credentials: true,
@@ -48,7 +69,14 @@ mongoose.connect(process.env.MONGO_URI, {
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const workspaceRoutes = require('./routes/workspaceRoutes');
+const channelRoutes = require('./routes/channelRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+
 app.use('/api/auth', authRoutes);
+app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/channels', channelRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -66,10 +94,145 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      auth: '/api/auth'
+      auth: '/api/auth',
+      workspaces: '/api/workspaces',
+      channels: '/api/channels',
+      messages: '/api/messages',
     }
   });
 });
+
+// Socket.io connection handling
+const User = require('./models/User');
+
+// Store online users
+const onlineUsers = new Map(); // userId -> socketId
+
+io.on('connection', (socket) => {
+  console.log('🔌 User connected:', socket.id);
+
+  // User joins with their ID
+  socket.on('user:online', async (userId) => {
+    try {
+      onlineUsers.set(userId, socket.id);
+      socket.userId = userId;
+
+      // Update user status in DB
+      await User.findByIdAndUpdate(userId, {
+        status: 'online',
+        lastSeen: new Date(),
+      });
+
+      // Broadcast to all clients that user is online
+      io.emit('user:status', { userId, status: 'online' });
+
+      console.log(`✅ User ${userId} is now online`);
+    } catch (error) {
+      console.error('Error setting user online:', error);
+    }
+  });
+
+  // User joins a workspace room
+  socket.on('workspace:join', (workspaceId) => {
+    socket.join(`workspace:${workspaceId}`);
+    console.log(`User joined workspace: ${workspaceId}`);
+  });
+
+  // User joins a channel room
+  socket.on('channel:join', (channelId) => {
+    socket.join(`channel:${channelId}`);
+    console.log(`User joined channel: ${channelId}`);
+  });
+
+  // User leaves a channel room
+  socket.on('channel:leave', (channelId) => {
+    socket.leave(`channel:${channelId}`);
+    console.log(`User left channel: ${channelId}`);
+  });
+
+  // Typing indicator
+  socket.on('typing:start', ({ channelId, userId, userName }) => {
+    socket.to(`channel:${channelId}`).emit('typing:user', {
+      channelId,
+      userId,
+      userName,
+      isTyping: true,
+    });
+  });
+
+  socket.on('typing:stop', ({ channelId, userId }) => {
+    socket.to(`channel:${channelId}`).emit('typing:user', {
+      channelId,
+      userId,
+      isTyping: false,
+    });
+  });
+
+  // Send message to channel
+  socket.on('message:send', (message) => {
+    if (message.channelId) {
+      io.to(`channel:${message.channelId}`).emit('message:new', message);
+    } else if (message.recipientId) {
+      // Direct message
+      const recipientSocketId = onlineUsers.get(message.recipientId);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit('message:new', message);
+      }
+      // Also send to sender
+      socket.emit('message:new', message);
+    }
+  });
+
+  // Message edited
+  socket.on('message:edit', (message) => {
+    if (message.channelId) {
+      io.to(`channel:${message.channelId}`).emit('message:updated', message);
+    }
+  });
+
+  // Message deleted
+  socket.on('message:delete', ({ messageId, channelId }) => {
+    io.to(`channel:${channelId}`).emit('message:deleted', { messageId });
+  });
+
+  // Reaction added
+  socket.on('reaction:add', ({ messageId, channelId, reaction }) => {
+    io.to(`channel:${channelId}`).emit('reaction:updated', {
+      messageId,
+      reaction,
+    });
+  });
+
+  // User disconnect
+  socket.on('disconnect', async () => {
+    try {
+      if (socket.userId) {
+        onlineUsers.delete(socket.userId);
+
+        // Update user status in DB
+        await User.findByIdAndUpdate(socket.userId, {
+          status: 'offline',
+          lastSeen: new Date(),
+        });
+
+        // Broadcast to all clients that user is offline
+        io.emit('user:status', {
+          userId: socket.userId,
+          status: 'offline',
+        });
+
+        console.log(`❌ User ${socket.userId} is now offline`);
+      }
+    } catch (error) {
+      console.error('Error setting user offline:', error);
+    }
+
+    console.log('🔌 User disconnected:', socket.id);
+  });
+});
+
+// Make io accessible to routes
+app.set('io', io);
 
 // 404 handler
 app.use((req, res) => {
@@ -90,8 +253,9 @@ app.use((err, req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 Client URL: ${process.env.CLIENT_URL}`);
+  console.log(`⚡ Socket.io ready for connections`);
 });
