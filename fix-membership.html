@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix SyncSpace Workspace Membership</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0f0f0f;
+            color: #fff;
+        }
+        .container {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .info {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #00d4ff;
+        }
+        button {
+            background: linear-gradient(135deg, #00d4ff 0%, #7b2ff7 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .status.success {
+            background: #1a4d2e;
+            border: 1px solid #4ade80;
+            display: block;
+        }
+        .status.error {
+            background: #4d1a1a;
+            border: 1px solid #f87171;
+            display: block;
+        }
+        .status.loading {
+            background: #2a3a4a;
+            border: 1px solid #60a5fa;
+            display: block;
+        }
+        code {
+            background: #2a2a2a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #00d4ff;
+        }
+        .step {
+            margin: 15px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .step::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #00d4ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Workspace Membership</h1>
+        <p>This will add you to the workspace and fix the 403 error.</p>
+        
+        <div class="info">
+            <strong>Workspace ID:</strong> <code>6989d67f723585010846b6a5</code><br>
+            <strong>User ID:</strong> <code>6989d67f723585010846b6a3</code>
+        </div>
+
+        <div class="step">
+            <strong>Step 1:</strong> Make sure you're logged into SyncSpace
+        </div>
+        <div class="step">
+            <strong>Step 2:</strong> Click the button below
+        </div>
+        <div class="step">
+            <strong>Step 3:</strong> Wait for success message
+        </div>
+        <div class="step">
+            <strong>Step 4:</strong> Refresh your SyncSpace app
+        </div>
+
+        <button id="fixBtn" onclick="fixMembership()">Fix Workspace Membership</button>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        async function fixMembership() {
+            const statusDiv = document.getElementById('status');
+            const btn = document.getElementById('fixBtn');
+            
+            // Check if logged in
+            const token = localStorage.getItem('token');
+            if (!token) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ <strong>Error:</strong> You are not logged in. Please login to SyncSpace first, then come back here.';
+                return;
+            }
+
+            // Show loading
+            btn.disabled = true;
+            statusDiv.className = 'status loading';
+            statusDiv.innerHTML = '⏳ <strong>Fixing membership...</strong> Please wait...';
+
+            try {
+                const response = await fetch('https://syncspace-backend-tfcc.onrender.com/api/fix/fix-membership/6989d67f723585010846b6a5', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = `
+                        ✅ <strong>Success!</strong><br>
+                        ${data.message}<br><br>
+                        <strong>Workspace:</strong> ${data.workspace.name}<br>
+                        <strong>Your Role:</strong> ${data.workspace.yourRole}<br>
+                        <strong>Members:</strong> ${data.workspace.memberCount}<br><br>
+                        <em>Redirecting to SyncSpace in 3 seconds...</em>
+                    `;
+                    
+                    // Redirect after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = 'https://syncspace-chat-app.vercel.app';
+                    }, 3000);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = `❌ <strong>Error:</strong> ${data.error || 'Failed to fix membership'}`;
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `
+                    ❌ <strong>Error:</strong> ${error.message}<br><br>
+                    <strong>Possible causes:</strong><br>
+                    • Backend is not deployed yet<br>
+                    • Network connection issue<br>
+                    • Backend is starting up (wait 30 seconds and try again)
+                `;
+                btn.disabled = false;
+            }
+        }
+
+        // Auto-detect if we have a token
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').innerHTML = '⚠️ <strong>Not logged in.</strong> Please login to SyncSpace first, then come back here.';
+            }
+        });
+    </script>
+</body>
+</html>
