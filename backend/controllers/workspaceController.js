@@ -16,7 +16,7 @@ exports.createWorkspace = async (req, res) => {
 
     // Generate slug from name
     const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
-    
+
     // Check if slug already exists
     const existingWorkspace = await Workspace.findOne({ slug });
     if (existingWorkspace) {
@@ -81,9 +81,9 @@ exports.getUserWorkspaces = async (req, res) => {
     const workspaces = await Workspace.find({
       'members.userId': userId,
     })
-    .populate('ownerId', 'fullName email avatar')
-    .populate('channels')
-    .sort({ updatedAt: -1 });
+      .populate('ownerId', 'fullName email avatar')
+      .populate('channels')
+      .sort({ updatedAt: -1 });
 
     res.status(200).json({ workspaces });
 
@@ -110,7 +110,7 @@ exports.getWorkspaceById = async (req, res) => {
 
     // Check if user is a member
     const isMember = workspace.members.some(
-      member => member.userId._id.toString() === userId
+      member => member.userId._id.toString() === userId.toString()
     );
 
     if (!isMember) {
@@ -199,7 +199,7 @@ exports.updateWorkspace = async (req, res) => {
 
     // Check if user is owner or admin
     const member = workspace.members.find(
-      m => m.userId.toString() === userId
+      m => m.userId.toString() === userId.toString()
     );
 
     if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
@@ -239,7 +239,7 @@ exports.getWorkspaceMembers = async (req, res) => {
 
     // Check if user is a member
     const isMember = workspace.members.some(
-      member => member.userId._id.toString() === userId
+      member => member.userId._id.toString() === userId.toString()
     );
 
     if (!isMember) {
@@ -268,7 +268,7 @@ exports.switchWorkspace = async (req, res) => {
 
     // Check if user is a member
     const isMember = workspace.members.some(
-      member => member.userId.toString() === userId
+      member => member.userId.toString() === userId.toString()
     );
 
     if (!isMember) {

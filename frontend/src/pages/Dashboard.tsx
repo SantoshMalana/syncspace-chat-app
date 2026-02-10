@@ -201,10 +201,19 @@ const Dashboard = () => {
       }
 
       // Fetch members for mentions
-      const membersData: any = await workspaceAPI.getMembers(workspace._id);
-      setWorkspaceMembers(membersData.members.map((m: any) =>
-        typeof m.userId === 'object' ? m.userId : { _id: m.userId, fullName: 'Unknown', email: '' }
-      ));
+      try {
+        const membersData: any = await workspaceAPI.getMembers(workspace._id);
+        if (membersData && membersData.members && Array.isArray(membersData.members)) {
+          setWorkspaceMembers(membersData.members.map((m: any) =>
+            typeof m.userId === 'object' ? m.userId : { _id: m.userId, fullName: 'Unknown', email: '' }
+          ));
+        } else {
+          setWorkspaceMembers([]);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch workspace members', err);
+        setWorkspaceMembers([]);
+      }
 
     } catch (error) {
       console.error('Error switching workspace:', error);
