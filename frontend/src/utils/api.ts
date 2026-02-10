@@ -28,6 +28,7 @@ async function apiRequest<T>(
             ...getAuthHeaders(),
             ...options.headers,
         },
+        credentials: 'include', // ⭐ CRITICAL: This is what was missing!
     };
 
     const response = await fetch(url, config);
@@ -199,6 +200,7 @@ export const uploadAPI = {
             headers: {
                 ...(token && { Authorization: `Bearer ${token}` }),
             },
+            credentials: 'include', // ⭐ CRITICAL: Added here too!
             body: formData,
         });
 
@@ -219,6 +221,7 @@ export const uploadAPI = {
             headers: {
                 ...(token && { Authorization: `Bearer ${token}` }),
             },
+            credentials: 'include', // ⭐ CRITICAL: Added here too!
             body: formData,
         });
 

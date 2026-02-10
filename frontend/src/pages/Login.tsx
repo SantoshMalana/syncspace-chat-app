@@ -7,35 +7,37 @@ const Login = () => {
   const [password, setPassword] = useState("");
 
   // ⭐ UPDATED FUNCTION
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    try {
-      // Call your backend API
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include', // ⭐ ADD THIS - Important for CORS with credentials
+      body: JSON.stringify({ email, password })
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (response.ok) {
-        // Save token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+    if (response.ok) {
+      // Save token and user data
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
 
-        // Redirect to dashboard
-        navigate('/dashboard');
-      } else {
-        // Show error message
-        alert(data.error || 'Login failed');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('Unable to connect to server. Please try again.');
+      // Redirect to dashboard
+      navigate('/dashboard');
+    } else {
+      // Show error message
+      alert(data.error || 'Login failed');
     }
-  };
+  } catch (error) {
+    console.error('Login error:', error);
+    alert('Unable to connect to server. Please try again.');
+  }
+};
 
   return (
     <div className="min-h-screen flex bg-bg">

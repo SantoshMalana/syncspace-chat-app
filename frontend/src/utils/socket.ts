@@ -11,11 +11,17 @@ export const initializeSocket = (userId: string): Socket => {
         return socket;
     }
 
+    const token = localStorage.getItem('token');
+
     socket = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
+        withCredentials: true, // ⭐ CRITICAL: Add this for CORS
         auth: {
-            token: localStorage.getItem('token'),
+            token: token,
         },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
     });
 
     socket.on('connect', () => {
@@ -24,12 +30,17 @@ export const initializeSocket = (userId: string): Socket => {
         socket?.emit('user:online', userId);
     });
 
-    socket.on('disconnect', () => {
-        console.log('❌ Socket disconnected');
+    socket.on('disconnect', (reason) => {
+        console.log('❌ Socket disconnected. Reason:', reason);
     });
 
     socket.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
+        console.error('Error details:', error.message);
+    });
+
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
     });
 
     return socket;

@@ -50,54 +50,77 @@ const Dashboard = () => {
   const [activeDMUser, setActiveDMUser] = useState<User | null>(null);
 
   // Initialize on mount
-  useEffect(() => {
-    initializeApp();
-    return () => {
-      disconnectSocket();
-    };
-  }, []);
-
-  const initializeApp = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const userStr = localStorage.getItem('user');
-
-      if (!token || !userStr) {
-        navigate('/login');
-        return;
-      }
-
-      const user = JSON.parse(userStr);
-      setCurrentUser(user);
-
-      // Initialize Socket.io
-      const socket = initializeSocket(user.id);
-      setupSocketListeners(socket);
-
-      // Fetch workspaces
-      const workspacesData: any = await workspaceAPI.getAll();
-      setWorkspaces(workspacesData.workspaces || []);
-
-      if (workspacesData.workspaces && workspacesData.workspaces.length > 0) {
-        const firstWorkspace = workspacesData.workspaces[0];
-        setCurrentWorkspace(firstWorkspace);
-        joinWorkspace(firstWorkspace._id);
-
-        // Fetch channels
-        const channelsData: any = await channelAPI.getWorkspaceChannels(firstWorkspace._id);
-        setChannels(channelsData.channels || []);
-
-        if (channelsData.channels && channelsData.channels.length > 0) {
-          selectChannel(channelsData.channels[0]);
-        }
-      }
-
-      setLoading(false);
-    } catch (error) {
-      console.error('Initialization error:', error);
-      navigate('/login');
-    }
+  // Initialize on mount
+useEffect(() => {
+  initializeApp();
+  return () => {
+    disconnectSocket();
   };
+}, []);
+
+const initializeApp = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+
+    if (!token || !userStr) {
+      navigate('/login');
+      return;
+    }
+
+    const user = JSON.parse(userStr);
+    setCurrentUser(user);
+
+    console.log('🔄 Initializing app...');
+    console.log('📡 Backend URL:', import.meta.env.VITE_API_URL);
+
+    // Initialize Socket.io
+    console.log('🔌 Connecting to Socket.io...');
+    const socket = initializeSocket(user.id);
+    setupSocketListeners(socket);
+
+    // Fetch workspaces
+    console.log('📥 Fetching workspaces...');
+    const workspacesData: any = await workspaceAPI.getAll();
+    console.log('✅ Workspaces loaded:', workspacesData);
+    
+    setWorkspaces(workspacesData.workspaces || []);
+
+    if (workspacesData.workspaces && workspacesData.workspaces.length > 0) {
+      const firstWorkspace = workspacesData.workspaces[0];
+      setCurrentWorkspace(firstWorkspace);
+      joinWorkspace(firstWorkspace._id);
+
+      // Fetch channels
+      console.log('📥 Fetching channels...');
+      const channelsData: any = await channelAPI.getWorkspaceChannels(firstWorkspace._id);
+      console.log('✅ Channels loaded:', channelsData);
+      
+      setChannels(channelsData.channels || []);
+
+      if (channelsData.channels && channelsData.channels.length > 0) {
+        selectChannel(channelsData.channels[0]);
+      }
+    }
+
+    setLoading(false);
+    console.log('✅ App initialized successfully');
+  } catch (error: any) {
+    console.error('❌ Initialization error:', error);
+    console.error('Error details:', error.message);
+    
+    // If it's an auth error, redirect to login
+    if (error.message?.includes('token') || error.message?.includes('401')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    } else {
+      // Show error to user
+      alert('Failed to connect to server. The server may be starting up (this can take 50+ seconds on free tier). Please wait and try again.');
+      setLoading(false);
+    }
+  }
+};
 
   const setupSocketListeners = (socket: any) => {
     socket.on('message:new', (message: Message) => {
