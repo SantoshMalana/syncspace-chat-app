@@ -14,6 +14,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Socket.io setup
+// Socket.io setup
 const io = new Server(server, {
   cors: {
     origin: function (origin, callback) {
@@ -25,37 +26,45 @@ const io = new Server(server, {
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(null, true);
+        callback(null, true); // Allow for now, can restrict later
       }
     },
     credentials: true,
+    methods: ['GET', 'POST'],
   },
+  transports: ['websocket', 'polling'], // ⭐ Add this
+  allowEIO3: true, // ⭐ Add this for compatibility
 });
 
 // Middleware
-app.use(express.json());
-
 // CORS Configuration
+// CORS Configuration
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'https://syncspace-realtime-collaboration-pl.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+].filter(Boolean);
+
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-
-    const allowedOrigins = [
-      process.env.CLIENT_URL || 'https://syncspace-realtime-collaboration-pl.vercel.app',
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ];
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true);
+      console.log('❌ Blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
+// Handle preflight requests
+app.options('*', cors());
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
