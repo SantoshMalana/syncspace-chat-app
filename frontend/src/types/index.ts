@@ -24,6 +24,7 @@ export interface Workspace {
     inviteCode?: string;
     createdAt: string;
     updatedAt: string;
+    id?: string; // For compatibility
 }
 
 export interface WorkspaceMember {

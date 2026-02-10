@@ -9,6 +9,7 @@ import DirectMessages from '../components/DirectMessages';
 import FileUpload from '../components/FileUpload';
 import EmojiPickerComponent from '../components/EmojiPickerComponent';
 import MentionAutocomplete from '../components/MentionAutocomplete';
+import ProfilePanel from '../components/ProfilePanel';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -36,6 +37,12 @@ const Dashboard = () => {
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
 
+  const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+  const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
+  const [showJoinWorkspaceModal, setShowJoinWorkspaceModal] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [joinInviteCode, setJoinInviteCode] = useState('');
+
   // Advanced features state
   const [showThreadPanel, setShowThreadPanel] = useState(false);
   const [activeThread, setActiveThread] = useState<Message | null>(null);
@@ -46,81 +53,163 @@ const Dashboard = () => {
   const [mentionSearch, setMentionSearch] = useState('');
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
-  const [showDM, setShowDM] = useState(false);
+  const [showDM, setShowDM] = useState(false); // Kept for logic safety, though rendering logic might have changed
   const [activeDMUser, setActiveDMUser] = useState<User | null>(null);
+  const [showProfilePanel, setShowProfilePanel] = useState(false);
+  const [activeProfileUser, setActiveProfileUser] = useState<User | null>(null);
 
   // Initialize on mount
   // Initialize on mount
-useEffect(() => {
-  initializeApp();
-  return () => {
-    disconnectSocket();
-  };
-}, []);
+  useEffect(() => {
+    initializeApp();
+    return () => {
+      disconnectSocket();
+    };
+  }, []);
 
-const initializeApp = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
+  const initializeApp = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
 
-    if (!token || !userStr) {
-      navigate('/login');
-      return;
-    }
-
-    const user = JSON.parse(userStr);
-    setCurrentUser(user);
-
-    console.log('🔄 Initializing app...');
-    console.log('📡 Backend URL:', import.meta.env.VITE_API_URL);
-
-    // Initialize Socket.io
-    console.log('🔌 Connecting to Socket.io...');
-    const socket = initializeSocket(user.id);
-    setupSocketListeners(socket);
-
-    // Fetch workspaces
-    console.log('📥 Fetching workspaces...');
-    const workspacesData: any = await workspaceAPI.getAll();
-    console.log('✅ Workspaces loaded:', workspacesData);
-    
-    setWorkspaces(workspacesData.workspaces || []);
-
-    if (workspacesData.workspaces && workspacesData.workspaces.length > 0) {
-      const firstWorkspace = workspacesData.workspaces[0];
-      setCurrentWorkspace(firstWorkspace);
-      joinWorkspace(firstWorkspace._id);
-
-      // Fetch channels
-      console.log('📥 Fetching channels...');
-      const channelsData: any = await channelAPI.getWorkspaceChannels(firstWorkspace._id);
-      console.log('✅ Channels loaded:', channelsData);
-      
-      setChannels(channelsData.channels || []);
-
-      if (channelsData.channels && channelsData.channels.length > 0) {
-        selectChannel(channelsData.channels[0]);
+      if (!token || !userStr) {
+        navigate('/login');
+        return;
       }
-    }
 
-    setLoading(false);
-    console.log('✅ App initialized successfully');
-  } catch (error: any) {
-    console.error('❌ Initialization error:', error);
-    console.error('Error details:', error.message);
-    
-    // If it's an auth error, redirect to login
-    if (error.message?.includes('token') || error.message?.includes('401')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      navigate('/login');
-    } else {
-      // Show error to user
-      alert('Failed to connect to server. The server may be starting up (this can take 50+ seconds on free tier). Please wait and try again.');
+      const user = JSON.parse(userStr);
+      setCurrentUser(user);
+
+      console.log('🔄 Initializing app...');
+      console.log('📡 Backend URL:', import.meta.env.VITE_API_URL);
+
+      // Initialize Socket.io
+      console.log('🔌 Connecting to Socket.io...');
+      const socket = initializeSocket(user.id);
+      setupSocketListeners(socket);
+
+      // Fetch workspaces
+      console.log('📥 Fetching workspaces...');
+      const workspacesData: any = await workspaceAPI.getAll();
+      console.log('✅ Workspaces loaded:', workspacesData);
+
+      setWorkspaces(workspacesData.workspaces || []);
+
+      if (workspacesData.workspaces && workspacesData.workspaces.length > 0) {
+        const firstWorkspace = workspacesData.workspaces[0];
+        setCurrentWorkspace(firstWorkspace);
+        joinWorkspace(firstWorkspace._id);
+
+        // Fetch channels
+        console.log('📥 Fetching channels...');
+        const channelsData: any = await channelAPI.getWorkspaceChannels(firstWorkspace._id);
+        console.log('✅ Channels loaded:', channelsData);
+
+        // Initialize first active channel
+        if (channelsData.channels && channelsData.channels.length > 0) {
+          setActiveChannel(channelsData.channels[0]);
+          joinChannel(channelsData.channels[0]._id);
+        }
+      } else {
+        // No workspaces found, prompt to create one
+        setShowCreateWorkspaceModal(true);
+      }
+    } catch (error: any) {
+      console.error('Error initializing app:', error);
+      if (window.location.pathname !== '/login') {
+        // navigate('/login');
+      }
+    } finally {
       setLoading(false);
     }
-  }
-};
+  };
+
+  const handleCreateWorkspace = async () => {
+    try {
+      if (!newWorkspaceName.trim()) return;
+
+      const response: any = await workspaceAPI.create(newWorkspaceName);
+      const newWorkspace = response.workspace;
+
+      setWorkspaces([...workspaces, newWorkspace]);
+      setCurrentWorkspace(newWorkspace);
+      setChannels([]); // New workspace has no channels initially (except maybe general)
+      setActiveChannel(null);
+      setShowCreateWorkspaceModal(false);
+      setNewWorkspaceName('');
+
+      // Refresh channels for new workspace (usually backend creates a 'general' channel)
+      const channelsData: any = await channelAPI.getWorkspaceChannels(newWorkspace._id);
+      setChannels(channelsData.channels || []);
+      if (channelsData.channels?.length > 0) {
+        setActiveChannel(channelsData.channels[0]);
+        joinChannel(channelsData.channels[0]._id);
+      }
+
+    } catch (error) {
+      console.error('Error creating workspace:', error);
+      alert('Failed to create workspace');
+    }
+  };
+
+  const handleJoinWorkspace = async () => {
+    try {
+      if (!joinInviteCode.trim()) return;
+
+      const response: any = await workspaceAPI.join(joinInviteCode);
+      const joinedWorkspace = response.workspace;
+
+      // Check if already in list
+      if (!workspaces.find(w => w._id === joinedWorkspace._id)) {
+        setWorkspaces([...workspaces, joinedWorkspace]);
+      }
+
+      handleSwitchWorkspace(joinedWorkspace);
+      setShowJoinWorkspaceModal(false);
+      setJoinInviteCode('');
+
+    } catch (error) {
+      console.error('Error joining workspace:', error);
+      alert('Failed to join workspace: Invalid code or already a member');
+    }
+  };
+
+  const handleSwitchWorkspace = async (workspace: Workspace) => {
+    if (activeChannel) {
+      leaveChannel(activeChannel._id);
+    }
+
+    // Switch in backend (optional, mostly for tracking)
+    try {
+      await workspaceAPI.switchWorkspace(workspace._id);
+    } catch (e) {
+      console.warn('Switch workspace API call failed', e);
+    }
+
+    setCurrentWorkspace(workspace);
+    setShowWorkspaceMenu(false);
+
+    // Fetch channels for new workspace
+    try {
+      const channelsData: any = await channelAPI.getWorkspaceChannels(workspace._id);
+      setChannels(channelsData.channels || []);
+      if (channelsData.channels?.length > 0) {
+        setActiveChannel(channelsData.channels[0]);
+        joinChannel(channelsData.channels[0]._id);
+      } else {
+        setActiveChannel(null);
+      }
+
+      // Fetch members for mentions
+      const membersData: any = await workspaceAPI.getMembers(workspace._id);
+      setWorkspaceMembers(membersData.members.map((m: any) =>
+        typeof m.userId === 'object' ? m.userId : { _id: m.userId, fullName: 'Unknown', email: '' }
+      ));
+
+    } catch (error) {
+      console.error('Error switching workspace:', error);
+    }
+  };
 
   const setupSocketListeners = (socket: any) => {
     socket.on('message:new', (message: Message) => {
@@ -180,6 +269,13 @@ const initializeApp = async () => {
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
+    }
+
+    // Update workspace members for mentions
+    if (currentWorkspace) {
+      setWorkspaceMembers(currentWorkspace.members.map((m: any) =>
+        typeof m.userId === 'object' ? m.userId : { _id: m.userId, fullName: 'Unknown', email: '' }
+      ));
     }
   };
 
@@ -301,6 +397,16 @@ const initializeApp = async () => {
     setActiveThread(null);
   };
 
+  const handleShowProfile = (user: User) => {
+    setActiveProfileUser(user);
+    setShowProfilePanel(true);
+    // Profile panel replaces thread panel on mobile, but can coexist on desktop
+    // For simplicity, let's close thread panel if open
+    if (window.innerWidth < 1200) {
+      handleCloseThread();
+    }
+  };
+
   const handleSendThreadReply = async (content: string) => {
     if (!activeThread || !activeChannel || !currentWorkspace) return;
 
@@ -336,6 +442,14 @@ const initializeApp = async () => {
       setShowMentions(false);
     }
 
+    // Get cursor position for mentions
+    if (e.target) {
+      // This is a rough estimation. For production, use a library like 'textarea-caret'
+      // or a hidden div to mirror the text and get exact coordinates.
+      // For now, we'll just show it above the input.
+      setMentionPosition({ top: -250, left: 0 });
+    }
+
     handleTyping();
   };
 
@@ -365,11 +479,6 @@ const initializeApp = async () => {
     }, 100);
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  };
-
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
@@ -393,12 +502,61 @@ const initializeApp = async () => {
       {/* Workspace Sidebar */}
       <aside className="w-64 bg-[#141414] border-r border-[#1f1f1f] flex flex-col">
 
-        {/* Workspace Header */}
-        <div className="p-4 border-b border-[#1f1f1f]">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            {currentWorkspace?.name || 'SyncSpace'}
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">{currentUser?.fullName}</p>
+        {/* Workspace Header - Dropdown */}
+        <div className="p-4 border-b border-[#1f1f1f] relative">
+          <button
+            onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
+            className="w-full flex items-center justify-between hover:bg-[#1f1f1f] p-2 -ml-2 rounded-lg transition-colors group"
+          >
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent text-left">
+                {currentWorkspace?.name || 'SyncSpace'}
+              </h1>
+              <p className="text-xs text-gray-500 mt-1 text-left">{currentUser?.fullName}</p>
+            </div>
+            <svg className={`w-5 h-5 text-gray-500 group-hover:text-white transition-transform ${showWorkspaceMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* Workspace Menu Dropdown */}
+          {showWorkspaceMenu && (
+            <div className="absolute top-full left-0 w-full mt-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-xl z-50 overflow-hidden">
+              <div className="max-h-60 overflow-y-auto">
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Switch Workspace</div>
+                {workspaces.map(ws => (
+                  <button
+                    key={ws._id || ws.id} // use both for safety
+                    onClick={() => handleSwitchWorkspace(ws)}
+                    className={`w-full text-left px-4 py-3 hover:bg-[#2a2a2a] transition-colors flex items-center justify-between ${currentWorkspace?._id === ws._id ? 'text-primary' : 'text-gray-300'}`}
+                  >
+                    <span className="truncate">{ws.name}</span>
+                    {currentWorkspace?._id === ws._id && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="border-t border-[#2a2a2a] p-2 space-y-1">
+                <button
+                  onClick={() => { setShowCreateWorkspaceModal(true); setShowWorkspaceMenu(false); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white rounded-md flex items-center gap-2"
+                >
+                  <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">+</div>
+                  Create Workspace
+                </button>
+                <button
+                  onClick={() => { setShowJoinWorkspaceModal(true); setShowWorkspaceMenu(false); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white rounded-md flex items-center gap-2"
+                >
+                  <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">#</div>
+                  Join Workspace
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Channels Section */}
@@ -434,17 +592,24 @@ const initializeApp = async () => {
           </div>
 
           {/* Direct Messages */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">Direct Messages</h3>
-            <p className="text-xs text-gray-600 italic">Coming soon...</p>
+          <div className="flex-1 overflow-hidden">
+            {currentUser && (
+              <DirectMessages
+                currentUser={currentUser}
+                workspaceId={currentWorkspace?._id || ''}
+                onSelectConversation={handleSelectDMConversation}
+                activeConversationUserId={activeDMUser?._id || activeDMUser?.id}
+                onShowProfile={handleShowProfile}
+              />
+            )}
           </div>
         </div>
 
         {/* User Profile */}
         <div className="p-4 border-t border-[#1f1f1f]">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold">
-              {currentUser && getInitials(currentUser.fullName)}
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold flex-shrink-0">
+              {currentUser ? getInitials(currentUser.fullName) : '?'}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate">{currentUser?.fullName}</p>
@@ -500,27 +665,25 @@ const initializeApp = async () => {
             </div>
           ) : (
             messages.map((message) => {
-              const sender = typeof message.senderId === 'object' ? message.senderId : null;
+              if (!currentUser) return null;
               return (
-                <div key={message._id} className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold flex-shrink-0">
-                    {sender ? getInitials(sender.fullName) : '?'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 mb-1">
-                      <span className="font-semibold text-sm">{sender?.fullName || 'Unknown'}</span>
-                      <span className="text-xs text-gray-500">{formatTime(message.createdAt)}</span>
-                      {message.isEdited && <span className="text-xs text-gray-600 italic">(edited)</span>}
-                    </div>
-                    <p className="text-sm text-gray-300 break-words">{message.content}</p>
-                  </div>
-                </div>
+                <MessageItem
+                  key={message._id}
+                  message={message}
+                  currentUser={currentUser}
+                  onEdit={handleEditMessage}
+                  onDelete={handleDeleteMessage}
+                  onReply={handleShowThread}
+                  onReaction={handleReaction}
+                  onShowThread={handleShowThread}
+                  onShowProfile={handleShowProfile}
+                />
               );
             })
           )}
 
           {/* Typing Indicator */}
-          {activeTypingUsers.length > 0 && (
+          {activeTypingUsers.length > 0 && activeTypingUsers[0] && (
             <div className="flex items-center gap-2 text-sm text-gray-500 italic">
               <div className="flex gap-1">
                 <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
@@ -536,15 +699,54 @@ const initializeApp = async () => {
 
         {/* Message Input */}
         {activeChannel && (
-          <div className="p-4 border-t border-[#1f1f1f]">
+          <div className="p-4 border-t border-[#1f1f1f] relative">
+            {/* Mentions Autocomplete */}
+            {showMentions && (
+              <MentionAutocomplete
+                members={workspaceMembers}
+                onSelect={handleMentionSelect}
+                searchTerm={mentionSearch}
+                position={mentionPosition}
+              />
+            )}
+
+            {/* Emoji Picker */}
+            {showEmojiPicker && (
+              <EmojiPickerComponent
+                onEmojiSelect={(emoji) => setMessageInput(prev => prev + emoji)}
+                onClose={() => setShowEmojiPicker(false)}
+              />
+            )}
+
+            {/* File Upload Preview */}
+            <div className="mb-2">
+              <FileUpload
+                onFileSelect={setSelectedFiles}
+                maxFiles={5}
+                maxSizeMB={10}
+              />
+              {uploading && (
+                <div className="text-xs text-primary mt-1 animate-pulse">
+                  Uploading files...
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-2 text-gray-400 hover:text-white transition-colors"
+                title="Add emoji"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+
               <input
                 type="text"
                 value={messageInput}
-                onChange={(e) => {
-                  setMessageInput(e.target.value);
-                  handleTyping();
-                }}
+                onChange={handleInputChange}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -565,6 +767,69 @@ const initializeApp = async () => {
           </div>
         )}
       </main>
+
+      {/* Create Workspace Modal */}
+      {showCreateWorkspaceModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a1a] p-6 rounded-2xl w-full max-w-md border border-[#2a2a2a]">
+            <h2 className="text-xl font-bold text-white mb-4">Create New Workspace</h2>
+            <input
+              type="text"
+              placeholder="Workspace Name"
+              value={newWorkspaceName}
+              onChange={(e) => setNewWorkspaceName(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-[#0f0f0f] border border-[#2a2a2a] text-white placeholder-gray-500 focus:outline-none focus:border-primary mb-4"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowCreateWorkspaceModal(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateWorkspace}
+                disabled={!newWorkspaceName.trim()}
+                className="px-6 py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Join Workspace Modal */}
+      {showJoinWorkspaceModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a1a] p-6 rounded-2xl w-full max-w-md border border-[#2a2a2a]">
+            <h2 className="text-xl font-bold text-white mb-4">Join Workspace</h2>
+            <p className="text-gray-400 text-sm mb-4">Enter the invite code shared by your workspace admin.</p>
+            <input
+              type="text"
+              placeholder="Invite Code"
+              value={joinInviteCode}
+              onChange={(e) => setJoinInviteCode(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-[#0f0f0f] border border-[#2a2a2a] text-white placeholder-gray-500 focus:outline-none focus:border-primary mb-4"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowJoinWorkspaceModal(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleJoinWorkspace}
+                disabled={!joinInviteCode.trim()}
+                className="px-6 py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Channel Modal */}
       {showCreateChannel && (
@@ -629,6 +894,34 @@ const initializeApp = async () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Thread Panel */}
+      {showThreadPanel && activeThread && currentUser && (
+        <ThreadPanel
+          parentMessage={activeThread}
+          currentUser={currentUser}
+          onClose={handleCloseThread}
+          onSendReply={handleSendThreadReply}
+          onEditMessage={handleEditMessage}
+          onDeleteMessage={handleDeleteMessage}
+          onReaction={handleReaction}
+          onShowProfile={handleShowProfile}
+        />
+      )}
+
+      {/* Profile Panel */}
+      {showProfilePanel && activeProfileUser && currentUser && (
+        <ProfilePanel
+          user={activeProfileUser}
+          currentUser={currentUser}
+          onClose={() => setShowProfilePanel(false)}
+          onMessage={(userId) => {
+            // Logic to switch to DM with this user
+            setShowProfilePanel(false);
+            handleSelectDMConversation(userId, activeProfileUser);
+          }}
+        />
       )}
     </div>
   );

@@ -10,6 +10,7 @@ interface MessageItemProps {
     onReply: (message: Message) => void;
     onReaction: (messageId: string, emoji: string) => void;
     onShowThread: (message: Message) => void;
+    onShowProfile: (user: User) => void;
 }
 
 const MessageItem = ({
@@ -20,6 +21,7 @@ const MessageItem = ({
     onReply,
     onReaction,
     onShowThread,
+    onShowProfile,
 }: MessageItemProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(message.content);
@@ -172,12 +174,20 @@ const MessageItem = ({
 
     return (
         <div className="flex items-start gap-3 group relative">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold flex-shrink-0">
+            <button
+                onClick={() => sender && typeof sender === 'object' && onShowProfile(sender as User)}
+                className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold flex-shrink-0 hover:opacity-80 transition-opacity"
+            >
                 {sender ? getInitials(sender.fullName) : '?'}
-            </div>
+            </button>
             <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 mb-1">
-                    <span className="font-semibold text-sm">{sender?.fullName || 'Unknown'}</span>
+                    <button
+                        onClick={() => sender && typeof sender === 'object' && onShowProfile(sender as User)}
+                        className="font-semibold text-sm hover:underline"
+                    >
+                        {sender?.fullName || 'Unknown'}
+                    </button>
                     <span className="text-xs text-gray-500">{formatTime(message.createdAt)}</span>
                     {message.isEdited && <span className="text-xs text-gray-600 italic">(edited)</span>}
                 </div>

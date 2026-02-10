@@ -10,6 +10,7 @@ interface ThreadPanelProps {
     onEditMessage: (messageId: string, content: string) => void;
     onDeleteMessage: (messageId: string) => void;
     onReaction: (messageId: string, emoji: string) => void;
+    onShowProfile: (user: User) => void;
 }
 
 const ThreadPanel = ({
@@ -20,6 +21,7 @@ const ThreadPanel = ({
     onEditMessage,
     onDeleteMessage,
     onReaction,
+    onShowProfile,
 }: ThreadPanelProps) => {
     const [replies, setReplies] = useState<Message[]>([]);
     const [replyInput, setReplyInput] = useState('');
@@ -92,6 +94,7 @@ const ThreadPanel = ({
                     onReply={() => { }}
                     onReaction={onReaction}
                     onShowThread={() => { }}
+                    onShowProfile={onShowProfile}
                 />
             </div>
 
@@ -121,6 +124,7 @@ const ThreadPanel = ({
                                 onReply={() => { }}
                                 onReaction={onReaction}
                                 onShowThread={() => { }}
+                                onShowProfile={onShowProfile}
                             />
                         ))}
                         <div ref={repliesEndRef} />

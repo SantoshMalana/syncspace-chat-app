@@ -6,6 +6,7 @@ interface DirectMessagesProps {
     workspaceId: string;
     onSelectConversation: (userId: string, user: User) => void;
     activeConversationUserId?: string;
+    onShowProfile: (user: User) => void;
 }
 
 const DirectMessages = ({
@@ -13,6 +14,7 @@ const DirectMessages = ({
     workspaceId,
     onSelectConversation,
     activeConversationUserId,
+    onShowProfile,
 }: DirectMessagesProps) => {
     const [conversations, setConversations] = useState<DMConversation[]>([]);
     const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
@@ -166,14 +168,20 @@ const DirectMessages = ({
                                     key={conversation._id}
                                     onClick={() => onSelectConversation(otherUser._id || '', otherUser)}
                                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${isActive
-                                            ? 'bg-primary/10 text-primary'
-                                            : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
                                         }`}
                                 >
                                     <div className="relative">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onShowProfile(otherUser);
+                                            }}
+                                            className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold hover:opacity-80 transition-opacity"
+                                        >
                                             {getInitials(otherUser.fullName)}
-                                        </div>
+                                        </button>
                                         <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#141414] ${otherUser.status === 'online' ? 'bg-green-500' : 'bg-gray-600'
                                             }`} />
                                     </div>
