@@ -3,9 +3,9 @@ const Channel = require('../models/Channel');
 const User = require('../models/User');
 const crypto = require('crypto');
 
-// Generate unique invite code
+// Generate unique invite code (8 bytes = 16 hex characters)
 const generateInviteCode = () => {
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
+  return crypto.randomBytes(8).toString('hex').toUpperCase();
 };
 
 // Create workspace

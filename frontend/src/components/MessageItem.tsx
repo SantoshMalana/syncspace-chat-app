@@ -88,18 +88,26 @@ const MessageItem = ({
             );
         }
 
-        // Highlight mentions
-        const contentWithMentions = message.content.replace(
-            /@(\w+)/g,
-            '<span class="text-primary font-medium">@$1</span>'
-        );
+        // Safely render mentions without XSS vulnerability
+        const renderTextWithMentions = (text: string) => {
+            const parts = text.split(/(@\w+)/g);
+            return parts.map((part, index) => {
+                if (part.startsWith('@')) {
+                    return (
+                        <span key={index} className="text-primary font-medium">
+                            {part}
+                        </span>
+                    );
+                }
+                return <span key={index}>{part}</span>;
+            });
+        };
 
         return (
             <div>
-                <p
-                    className="text-sm text-gray-300 break-words"
-                    dangerouslySetInnerHTML={{ __html: contentWithMentions }}
-                />
+                <p className="text-sm text-gray-300 break-words">
+                    {renderTextWithMentions(message.content)}
+                </p>
 
                 {/* Attachments */}
                 {message.attachments && message.attachments.length > 0 && (

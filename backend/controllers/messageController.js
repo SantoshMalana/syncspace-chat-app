@@ -178,7 +178,8 @@ exports.sendDirectMessage = async (req, res) => {
     // Emit socket event for real-time message delivery
     const io = req.app.get('io');
     if (io) {
-      io.to(`channel:${channelId}`).emit('message:new', populatedMessage);
+      // Emit to both sender and recipient (sender might be on a different device)
+      io.emit('message:new', populatedMessage);
     }
 
     res.status(201).json({

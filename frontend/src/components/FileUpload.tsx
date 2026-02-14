@@ -69,7 +69,13 @@ const FileUpload = ({ onFileSelect, maxFiles = 5, maxSizeMB = 10 }: FileUploadPr
     };
 
     return (
-        <div className="relative">
+        <div 
+            className="relative"
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+        >
             <input
                 ref={fileInputRef}
                 type="file"
@@ -109,11 +115,7 @@ const FileUpload = ({ onFileSelect, maxFiles = 5, maxSizeMB = 10 }: FileUploadPr
 
             {dragActive && (
                 <div
-                    className="absolute inset-0 bg-primary/10 border-2 border-primary border-dashed rounded-lg flex items-center justify-center"
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
+                    className="absolute inset-0 bg-primary/10 border-2 border-primary border-dashed rounded-lg flex items-center justify-center pointer-events-none"
                 >
                     <p className="text-primary font-medium">Drop files here</p>
                 </div>

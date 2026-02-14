@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { workspaceAPI, channelAPI, messageAPI, uploadAPI } from '../utils/api';
-import { initializeSocket, getSocket, joinWorkspace, joinChannel, leaveChannel, sendTypingStart, sendTypingStop, disconnectSocket, joinThread, leaveThread } from '../utils/socket';
+import { initializeSocket, joinWorkspace, joinChannel, leaveChannel, sendTypingStart, sendTypingStop, disconnectSocket, joinThread, leaveThread } from '../utils/socket';
 import type { Workspace, Channel, Message, User, TypingUser } from '../types';
 import MessageItem from '../components/MessageItem';
 import ThreadPanel from '../components/ThreadPanel';
@@ -146,6 +146,18 @@ const Dashboard = () => {
         joinChannel(channelsData.channels[0]._id);
       }
 
+      // Fetch members for new workspace
+      try {
+        const membersData: any = await workspaceAPI.getMembers(newWorkspace._id);
+        if (membersData && membersData.members && Array.isArray(membersData.members)) {
+          setWorkspaceMembers(membersData.members.map((m: any) =>
+            typeof m.userId === 'object' ? m.userId : { _id: m.userId, fullName: 'Unknown', email: '' }
+          ));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch workspace members', err);
+      }
+
     } catch (error) {
       console.error('Error creating workspace:', error);
       alert('Failed to create workspace');
@@ -270,6 +282,9 @@ const Dashboard = () => {
     }
 
     setActiveChannel(channel);
+    setActiveDMUser(null);
+    setShowDM(false);
+    setMessageInput(''); // Clear message input when switching channels
     joinChannel(channel._id);
 
     try {
@@ -289,7 +304,10 @@ const Dashboard = () => {
   };
 
   const sendMessage = async () => {
-    if (!messageInput.trim() || !activeChannel || !currentWorkspace || !currentUser) return;
+    if (!messageInput.trim() || !currentWorkspace || !currentUser) return;
+
+    // Check we have either activeChannel (for channel message) or activeDMUser (for DM)
+    if (!activeChannel && !activeDMUser) return;
 
     try {
       // Upload files if any
@@ -302,23 +320,42 @@ const Dashboard = () => {
         setUploading(false);
       }
 
-      // Extract mentions
-      const mentionMatches = messageInput.match(/@(\w+)/g);
-      const mentions = mentionMatches ? mentionMatches.map(m => m.substring(1)) : [];
+      if (showDM && activeDMUser) {
+        // Send direct message
+        await messageAPI.sendDirectMessage({
+          recipientId: activeDMUser._id || activeDMUser.id,
+          content: messageInput,
+          workspaceId: currentWorkspace._id,
+          attachments,
+        });
+      } else if (activeChannel) {
+        // Send channel message
+        // Extract mentions - get actual User IDs from workspace members
+        const mentionMatches = messageInput.match(/@[\w\s]+/g);
+        const mentions = mentionMatches
+          ? mentionMatches
+              .map(m => m.substring(1).trim())
+              .map(name => {
+                const user = workspaceMembers.find(u => u.fullName.toLowerCase() === name.toLowerCase());
+                return user?._id || user?.id;
+              })
+              .filter(Boolean)
+          : [];
 
-      await messageAPI.sendChannelMessage({
-        channelId: activeChannel._id,
-        content: messageInput,
-        workspaceId: currentWorkspace._id,
-        attachments,
-        mentions,
-      });
+        await messageAPI.sendChannelMessage({
+          channelId: activeChannel._id,
+          content: messageInput,
+          workspaceId: currentWorkspace._id,
+          attachments,
+          mentions,
+        });
+        sendTypingStop(activeChannel._id, currentUser.id);
+      }
 
       setMessageInput('');
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      sendTypingStop(activeChannel._id, currentUser.id);
     } catch (error) {
       console.error('Error sending message:', error);
       setUploading(false);
@@ -470,13 +507,21 @@ const Dashboard = () => {
   };
 
   const handleSelectDMConversation = async (userId: string, user: User) => {
+    if (activeChannel) {
+      leaveChannel(activeChannel._id);
+    }
+
     setActiveDMUser(user);
     setShowDM(true);
+    setActiveChannel(null);
+    setMessageInput(''); // Clear message input when switching to DM
+    
     // Fetch DM messages
     if (!currentWorkspace) return;
     try {
       const messagesData: any = await messageAPI.getDirectMessages(userId, currentWorkspace._id);
       setMessages(messagesData.messages || []);
+      scrollToBottom();
     } catch (error) {
       console.error('Error fetching DM messages:', error);
     }
@@ -669,12 +714,34 @@ const Dashboard = () => {
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <h3 className="text-xl font-semibold text-gray-400 mb-2">No messages yet</h3>
-                <p className="text-gray-600">Be the first to send a message in #{activeChannel.name}</p>
+                <p className="text-gray-600">
+                  {showDM && activeDMUser
+                    ? `Be the first to send a message to ${activeDMUser.fullName}`
+                    : `Be the first to send a message in #${activeChannel?.name}`}
+                </p>
               </div>
             </div>
           ) : (
             messages.map((message) => {
               if (!currentUser) return null;
+              // Filter messages based on context (channel vs DM)
+              if (showDM && activeDMUser) {
+                // Show DM messages - both sent and received
+                const senderId = typeof message.senderId === 'object' ? (message.senderId._id || message.senderId.id) : message.senderId;
+                const recipientId = typeof message.recipientId === 'object' ? (message.recipientId._id || message.recipientId.id) : message.recipientId;
+                const currentUserId = currentUser._id || currentUser.id;
+                const selectedUserId = activeDMUser._id || activeDMUser.id;
+                
+                const isFromCurrentUser = senderId === currentUserId;
+                const isToCurrentUser = recipientId === currentUserId;
+                const isDMWithSelectedUser = senderId === selectedUserId || recipientId === selectedUserId;
+                
+                if (!(isFromCurrentUser || isToCurrentUser) || !isDMWithSelectedUser) return null;
+              } else if (activeChannel) {
+                // Show only channel messages
+                if (message.messageType !== 'channel' || message.channelId !== activeChannel._id) return null;
+              }
+              
               return (
                 <MessageItem
                   key={message._id}
@@ -707,7 +774,7 @@ const Dashboard = () => {
         </div>
 
         {/* Message Input */}
-        {activeChannel && (
+        {(activeChannel || showDM) && (
           <div className="p-4 border-t border-[#1f1f1f] relative">
             {/* Mentions Autocomplete */}
             {showMentions && (
@@ -762,7 +829,7 @@ const Dashboard = () => {
                     sendMessage();
                   }
                 }}
-                placeholder={`Message #${activeChannel.name}`}
+                placeholder={showDM && activeDMUser ? `Message ${activeDMUser.fullName}` : activeChannel ? `Message #${activeChannel.name}` : 'Select a channel or DM'}
                 className="flex-1 px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-white placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
               />
               <button

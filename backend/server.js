@@ -5,15 +5,24 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 
 // Load environment variables
 dotenv.config();
+
+// Validate required environment variables
+const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+  console.error('Please check your .env file and ensure all required variables are set.');
+  process.exit(1);
+}
 
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io setup
 // Socket.io setup
 const io = new Server(server, {
   cors: {
@@ -21,12 +30,14 @@ const io = new Server(server, {
       const allowedOrigins = [
         process.env.CLIENT_URL || 'https://syncspace-realtime-collaboration-pl.vercel.app',
         'http://localhost:5173',
+        'http://localhost:5174',
         'http://localhost:3000'
       ];
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(null, true); // Allow for now, can restrict later
+        console.log('❌ Blocked Socket.io origin:', origin);
+        callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
@@ -38,11 +49,11 @@ const io = new Server(server, {
 
 // Middleware
 // CORS Configuration
-// CORS Configuration
 const allowedOrigins = [
   process.env.CLIENT_URL,
   'https://syncspace-realtime-collaboration-pl.vercel.app',
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:3000'
 ].filter(Boolean);
 
@@ -50,7 +61,7 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -66,6 +77,10 @@ app.use(cors({
 // Handle preflight requests
 app.options('*', cors());
 
+// Parse JSON request bodies (CRITICAL: Must come before routes)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully'))
@@ -77,6 +92,23 @@ mongoose.connect(process.env.MONGO_URI)
 // Serve static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Rate limiting configuration
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs
+  message: 'Too many authentication attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // Limit each IP to 100 requests per minute
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const workspaceRoutes = require('./routes/workspaceRoutes');
@@ -84,6 +116,11 @@ const channelRoutes = require('./routes/channelRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const fixRoutes = require('./routes/fixRoutes');
+
+// Apply rate limiting
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
+app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/workspaces', workspaceRoutes);
@@ -118,9 +155,27 @@ app.get('/', (req, res) => {
 
 // Socket.io connection handling
 const User = require('./models/User');
+const jwt = require('jsonwebtoken');
 
 // Store online users
 const onlineUsers = new Map(); // userId -> socketId
+
+// Socket.io authentication middleware
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+      return next(new Error('Authentication error: No token provided'));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = decoded.id;
+    next();
+  } catch (error) {
+    console.error('Socket authentication error:', error.message);
+    next(new Error('Authentication error: Invalid token'));
+  }
+});
 
 io.on('connection', (socket) => {
   console.log('🔌 User connected:', socket.id);
@@ -262,19 +317,35 @@ app.set('io', io);
 
 // 404 handler
 app.use((req, res) => {
+  console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
   res.status(404).json({
     error: 'Route not found',
-    path: req.path
+    path: req.path,
+    method: req.method
   });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message
+  // Log error details
+  console.error('❌ Server Error:', {
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    path: req.path,
+    method: req.method
   });
+
+  // Don't expose stack traces in production
+  const errorResponse = {
+    error: err.message || 'Internal server error',
+    path: req.path
+  };
+
+  if (process.env.NODE_ENV === 'development') {
+    errorResponse.stack = err.stack;
+  }
+
+  res.status(err.status || 500).json(errorResponse);
 });
 
 // Start Server

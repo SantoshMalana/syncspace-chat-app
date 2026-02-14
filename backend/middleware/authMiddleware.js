@@ -23,7 +23,12 @@ exports.authenticate = async (req, res, next) => {
     }
 
     // Attach user to request (with both id and _id for compatibility)
-    req.user = { ...user.toObject(), id: user._id };
+    // CRITICAL: Ensure id is a string for comparisons
+    req.user = {
+      ...user.toObject(),
+      id: user._id.toString(),
+      _id: user._id
+    };
     next();
 
   } catch (error) {

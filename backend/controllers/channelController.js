@@ -91,8 +91,8 @@ exports.getWorkspaceChannels = async (req, res) => {
         { isPrivate: true, members: userId }
       ]
     })
-    .populate('createdBy', 'fullName email avatar')
-    .sort({ createdAt: 1 });
+      .populate('createdBy', 'fullName email avatar')
+      .sort({ createdAt: 1 });
 
     res.status(200).json({ channels });
 
@@ -117,7 +117,7 @@ exports.getChannelById = async (req, res) => {
     }
 
     // Check access
-    if (channel.isPrivate && !channel.members.some(m => m._id.toString() === userId)) {
+    if (channel.isPrivate && !channel.members.some(m => m._id.toString() === userId.toString())) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -218,7 +218,7 @@ exports.updateChannel = async (req, res) => {
     if (channel.createdBy.toString() !== userId) {
       const workspace = await Workspace.findById(channel.workspaceId);
       const member = workspace.members.find(m => m.userId.toString() === userId);
-      
+
       if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
         return res.status(403).json({ error: 'Permission denied' });
       }
@@ -262,7 +262,7 @@ exports.deleteChannel = async (req, res) => {
     // Check permissions
     const workspace = await Workspace.findById(channel.workspaceId);
     const member = workspace.members.find(m => m.userId.toString() === userId);
-    
+
     if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
       return res.status(403).json({ error: 'Permission denied' });
     }
