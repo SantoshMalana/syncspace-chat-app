@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const passport = require('passport');
 const User = require('../models/User');
 const Workspace = require('../models/Workspace');
 const Channel = require('../models/Channel');
@@ -13,6 +14,65 @@ const generateToken = (userId) => {
     expiresIn: '30d',
   });
 };
+
+// ========================================
+// GOOGLE OAUTH ROUTES
+// ========================================
+
+// @route   GET /api/auth/google
+// @desc    Initiate Google OAuth
+router.get('/google',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false 
+  })
+);
+
+// @route   GET /api/auth/google/callback
+// @desc    Google OAuth callback
+router.get('/google/callback',
+  passport.authenticate('google', { 
+    failureRedirect: `${process.env.CLIENT_URL}/login?error=google_auth_failed`,
+    session: false 
+  }),
+  async (req, res) => {
+    try {
+      // Generate JWT token
+      const token = generateToken(req.user._id);
+
+      // Update user status to online
+      await User.findByIdAndUpdate(req.user._id, {
+        status: 'online',
+        lastSeen: new Date(),
+      });
+
+      // Populate user data
+      const user = await User.findById(req.user._id)
+        .select('-password')
+        .populate('workspaces')
+        .populate('currentWorkspace');
+
+      // Redirect to frontend with token
+      res.redirect(`${process.env.CLIENT_URL}/auth/google/success?token=${token}&user=${encodeURIComponent(JSON.stringify({
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        avatar: user.avatar,
+        status: user.status,
+        statusMessage: user.statusMessage,
+        workspaces: user.workspaces,
+        currentWorkspace: user.currentWorkspace,
+      }))}`);
+    } catch (error) {
+      console.error('Google OAuth callback error:', error);
+      res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+    }
+  }
+);
+
+// ========================================
+// REGULAR AUTH ROUTES (EXISTING)
+// ========================================
 
 // Signup
 router.post('/signup', async (req, res) => {

@@ -46,7 +46,7 @@ exports.sendChannelMessage = async (req, res) => {
     await message.save();
 
     const populatedMessage = await Message.findById(message._id)
-      .populate('senderId', 'fullName email avatar status')
+      .populate('senderId', 'fullName email avatar status avatarFrame')
       .populate('mentions', 'fullName email');
 
     // Emit socket event for real-time message delivery
@@ -106,8 +106,9 @@ exports.getChannelMessages = async (req, res) => {
     }
 
     const messages = await Message.find(query)
-      .populate('senderId', 'fullName email avatar status')
+      .populate('senderId', 'fullName email avatar status avatarFrame')
       .populate('mentions', 'fullName email')
+      .populate('readBy.userId', 'fullName avatar')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
@@ -172,8 +173,8 @@ exports.sendDirectMessage = async (req, res) => {
     await dmConversation.save();
 
     const populatedMessage = await Message.findById(message._id)
-      .populate('senderId', 'fullName email avatar status')
-      .populate('recipientId', 'fullName email avatar status');
+      .populate('senderId', 'fullName email avatar status avatarFrame')
+      .populate('recipientId', 'fullName email avatar status avatarFrame');
 
     // Emit socket event for real-time message delivery
     const io = req.app.get('io');
@@ -216,8 +217,9 @@ exports.getDirectMessages = async (req, res) => {
     }
 
     const messages = await Message.find(query)
-      .populate('senderId', 'fullName email avatar status')
-      .populate('recipientId', 'fullName email avatar status')
+      .populate('senderId', 'fullName email avatar status avatarFrame')
+      .populate('recipientId', 'fullName email avatar status avatarFrame')
+      .populate('readBy.userId', 'fullName avatar')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
@@ -402,6 +404,156 @@ exports.addReaction = async (req, res) => {
   }
 };
 
+// Mark message as read
+exports.markAsRead = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if already read
+    const alreadyRead = message.readBy.some(r => r.userId.toString() === userId);
+
+    if (!alreadyRead) {
+      message.readBy.push({
+        userId,
+        readAt: new Date()
+      });
+      await message.save();
+
+      // Emit socket event
+      const io = req.app.get('io');
+      if (io) {
+        // Emit to channel or DM participants
+        const room = message.channelId
+          ? `channel:${message.channelId}`
+          : `direct:${message.recipientId}`; // This might need refinement for DMs
+
+        io.to(room).emit('message:read', {
+          messageId,
+          userId,
+          readAt: new Date()
+        });
+
+        // Also emit to sender specifically for DMs if possible
+        // For now, client side will handle the update
+      }
+    }
+
+    res.status(200).json({ success: true });
+
+  } catch (error) {
+    console.error('Mark read error:', error);
+    res.status(500).json({ error: 'Failed to mark message as read' });
+  }
+};
+
+// Report message
+exports.reportMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { reason } = req.body;
+    const userId = req.user.id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    message.reports.push({
+      userId,
+      reason,
+    });
+
+    await message.save();
+
+    res.status(200).json({ message: 'Message reported successfully' });
+
+  } catch (error) {
+    console.error('Report message error:', error);
+    res.status(500).json({ error: 'Failed to report message' });
+  }
+};
+
+// Mark message as read
+exports.markAsRead = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if already read
+    const alreadyRead = message.readBy.some(r => r.userId.toString() === userId);
+
+    if (!alreadyRead) {
+      message.readBy.push({
+        userId,
+        readAt: new Date()
+      });
+      await message.save();
+
+      // Emit socket event
+      const io = req.app.get('io');
+      if (io) {
+        const room = message.channelId
+          ? `channel:${message.channelId}`
+          : `direct:${message.recipientId}`;
+
+        io.to(room).emit('message:read', {
+          messageId,
+          userId,
+          readAt: new Date()
+        });
+      }
+    }
+
+    res.status(200).json({ success: true });
+
+  } catch (error) {
+    console.error('Mark read error:', error);
+    res.status(500).json({ error: 'Failed to mark message as read' });
+  }
+};
+
+// Report message
+exports.reportMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { reason } = req.body;
+    const userId = req.user.id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    message.reports.push({
+      userId,
+      reason,
+    });
+
+    await message.save();
+
+    res.status(200).json({ message: 'Message reported successfully' });
+
+  } catch (error) {
+    console.error('Report message error:', error);
+    res.status(500).json({ error: 'Failed to report message' });
+  }
+};
+
 // Get thread replies
 exports.getThreadReplies = async (req, res) => {
   try {
@@ -411,7 +563,8 @@ exports.getThreadReplies = async (req, res) => {
 
     // Verify parent message exists
     const parentMessage = await Message.findById(messageId)
-      .populate('senderId', 'fullName email avatar status');
+      .populate('senderId', 'fullName email avatar status avatarFrame') // Added avatarFrame
+      .populate('mentions', 'fullName email');
 
     if (!parentMessage) {
       return res.status(404).json({ error: 'Message not found' });
@@ -430,7 +583,7 @@ exports.getThreadReplies = async (req, res) => {
       threadId: messageId,
       isDeleted: false,
     })
-      .populate('senderId', 'fullName email avatar status')
+      .populate('senderId', 'fullName email avatar status avatarFrame') // Added avatarFrame
       .populate('mentions', 'fullName email')
       .sort({ createdAt: 1 })
       .limit(parseInt(limit));

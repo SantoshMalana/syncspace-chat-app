@@ -20,4 +20,8 @@ router.post('/:messageId/reaction', authenticate, messageController.addReaction)
 // Thread replies
 router.get('/thread/:messageId', authenticate, messageController.getThreadReplies);
 
+// Read receipts and reporting
+router.post('/:messageId/read', authenticate, messageController.markAsRead);
+router.post('/:messageId/report', authenticate, messageController.reportMessage);
+
 module.exports = router;

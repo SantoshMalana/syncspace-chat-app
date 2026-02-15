@@ -12,6 +12,15 @@ router.get('/workspace/:workspaceId', authenticate, channelController.getWorkspa
 // Get channel by ID
 router.get('/:channelId', authenticate, channelController.getChannelById);
 
+// NEW: Get channel details (with populated members)
+router.get('/:channelId/details', authenticate, channelController.getChannelDetails);
+
+// NEW: Add member to channel by email
+router.post('/:channelId/members', authenticate, channelController.addMemberByEmail);
+
+// NEW: Remove member from channel
+router.delete('/:channelId/members/:memberId', authenticate, channelController.removeMemberFromChannel);
+
 // Join channel
 router.post('/:channelId/join', authenticate, channelController.joinChannel);
 

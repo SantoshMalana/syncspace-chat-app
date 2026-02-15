@@ -7,6 +7,7 @@ exports.authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No token provided');
       return res.status(401).json({ error: 'No token provided' });
     }
 
@@ -19,20 +20,23 @@ exports.authenticate = async (req, res, next) => {
     const user = await User.findById(decoded.id).select('-password');
 
     if (!user) {
+      console.log('❌ User not found for token');
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Attach user to request (with both id and _id for compatibility)
-    // CRITICAL: Ensure id is a string for comparisons
+    // Attach user to request with CONSISTENT STRING ID
+    // This ensures all comparisons work correctly
     req.user = {
       ...user.toObject(),
-      id: user._id.toString(),
-      _id: user._id
+      id: user._id.toString(), // Always a string for comparisons
+      _id: user._id // Keep ObjectId for mongoose operations
     };
+
+    console.log('✅ User authenticated:', user.fullName, req.user.id);
     next();
 
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    console.error('❌ Auth middleware error:', error.message);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 };

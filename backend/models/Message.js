@@ -68,6 +68,27 @@ const messageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   }],
+  readBy: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    readAt: {
+      type: Date,
+      default: Date.now,
+    }
+  }],
+  reports: [{
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    reason: String,
+    reportedAt: {
+      type: Date,
+      default: Date.now,
+    }
+  }],
 }, {
   timestamps: true,
 });

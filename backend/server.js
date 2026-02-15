@@ -6,9 +6,14 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
+const passport = require('passport'); // ⭐ ADD THIS
+const session = require('express-session'); // ⭐ ADD THIS
 
 // Load environment variables
 dotenv.config();
+
+// ⭐ Initialize Passport Config
+require('./config/passport'); // ADD THIS LINE
 
 // Validate required environment variables
 const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET'];
@@ -43,8 +48,8 @@ const io = new Server(server, {
     credentials: true,
     methods: ['GET', 'POST'],
   },
-  transports: ['websocket', 'polling'], // ⭐ Add this
-  allowEIO3: true, // ⭐ Add this for compatibility
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
 });
 
 // Middleware
@@ -74,12 +79,28 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
+
 // Handle preflight requests
 app.options('*', cors());
 
 // Parse JSON request bodies (CRITICAL: Must come before routes)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ⭐ Session middleware (required for Passport)
+app.use(session({
+  secret: process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // true in production
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// ⭐ Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
@@ -355,4 +376,5 @@ server.listen(PORT, () => {
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 Client URL: ${process.env.CLIENT_URL}`);
   console.log(`⚡ Socket.io ready for connections`);
+  console.log(`🔐 Google OAuth enabled`);
 });

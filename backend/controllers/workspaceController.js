@@ -3,6 +3,29 @@ const Channel = require('../models/Channel');
 const User = require('../models/User');
 const crypto = require('crypto');
 
+// Helper function to safely compare MongoDB ObjectIds
+const compareIds = (id1, id2) => {
+  if (!id1 || !id2) return false;
+  
+  const getId = (id) => {
+    if (typeof id === 'string') return id;
+    if (id._id) return id._id.toString();
+    return id.toString();
+  };
+  
+  return getId(id1) === getId(id2);
+};
+
+// Helper to check if user is workspace member
+const isWorkspaceMember = (workspace, userId) => {
+  if (!workspace || !workspace.members) return false;
+  
+  return workspace.members.some(member => {
+    const memberId = member.userId || member;
+    return compareIds(memberId, userId);
+  });
+};
+
 // Generate unique invite code (8 bytes = 16 hex characters)
 const generateInviteCode = () => {
   return crypto.randomBytes(8).toString('hex').toUpperCase();
@@ -12,16 +35,22 @@ const generateInviteCode = () => {
 exports.createWorkspace = async (req, res) => {
   try {
     const { name, description } = req.body;
-    const userId = req.user.id; // From auth middleware
+    const userId = req.user.id;
+
+    console.log('📝 Creating workspace:', { name, userId });
 
     // Generate slug from name
-    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
-
-    // Check if slug already exists
-    const existingWorkspace = await Workspace.findOne({ slug });
-    if (existingWorkspace) {
-      return res.status(400).json({ error: 'Workspace name already taken' });
+    const baseSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+    
+    // Check if slug already exists and make it unique
+    let slug = baseSlug;
+    let counter = 1;
+    while (await Workspace.findOne({ slug })) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
     }
+
+    console.log('✅ Generated unique slug:', slug);
 
     // Create workspace
     const workspace = new Workspace({
@@ -61,6 +90,8 @@ exports.createWorkspace = async (req, res) => {
       currentWorkspace: workspace._id,
     });
 
+    console.log('✅ Workspace created successfully');
+
     res.status(201).json({
       message: 'Workspace created successfully',
       workspace,
@@ -68,7 +99,7 @@ exports.createWorkspace = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create workspace error:', error);
+    console.error('❌ Create workspace error:', error);
     res.status(500).json({ error: 'Failed to create workspace' });
   }
 };
@@ -78,6 +109,8 @@ exports.getUserWorkspaces = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    console.log('📥 Fetching workspaces for user:', userId);
+
     const workspaces = await Workspace.find({
       'members.userId': userId,
     })
@@ -85,10 +118,12 @@ exports.getUserWorkspaces = async (req, res) => {
       .populate('channels')
       .sort({ updatedAt: -1 });
 
+    console.log('✅ Found', workspaces.length, 'workspaces');
+
     res.status(200).json({ workspaces });
 
   } catch (error) {
-    console.error('Get workspaces error:', error);
+    console.error('❌ Get workspaces error:', error);
     res.status(500).json({ error: 'Failed to fetch workspaces' });
   }
 };
@@ -98,6 +133,8 @@ exports.getWorkspaceById = async (req, res) => {
   try {
     const { workspaceId } = req.params;
     const userId = req.user.id;
+
+    console.log('📥 Fetching workspace:', workspaceId, 'for user:', userId);
 
     const workspace = await Workspace.findById(workspaceId)
       .populate('ownerId', 'fullName email avatar')
@@ -109,18 +146,17 @@ exports.getWorkspaceById = async (req, res) => {
     }
 
     // Check if user is a member
-    const isMember = workspace.members.some(
-      member => member.userId._id.toString() === userId.toString()
-    );
-
-    if (!isMember) {
+    if (!isWorkspaceMember(workspace, userId)) {
+      console.log('❌ User not a workspace member');
       return res.status(403).json({ error: 'Access denied' });
     }
+
+    console.log('✅ Workspace fetched successfully');
 
     res.status(200).json({ workspace });
 
   } catch (error) {
-    console.error('Get workspace error:', error);
+    console.error('❌ Get workspace error:', error);
     res.status(500).json({ error: 'Failed to fetch workspace' });
   }
 };
@@ -131,6 +167,8 @@ exports.joinWorkspace = async (req, res) => {
     const { inviteCode } = req.body;
     const userId = req.user.id;
 
+    console.log('📥 Joining workspace with invite code:', inviteCode);
+
     const workspace = await Workspace.findOne({ inviteCode });
 
     if (!workspace) {
@@ -138,11 +176,7 @@ exports.joinWorkspace = async (req, res) => {
     }
 
     // Check if already a member
-    const isMember = workspace.members.some(
-      member => member.userId.toString() === userId
-    );
-
-    if (isMember) {
+    if (isWorkspaceMember(workspace, userId)) {
       return res.status(400).json({ error: 'Already a member of this workspace' });
     }
 
@@ -167,11 +201,13 @@ exports.joinWorkspace = async (req, res) => {
     });
 
     for (let channel of publicChannels) {
-      if (!channel.members.includes(userId)) {
+      if (!channel.members.some(m => compareIds(m, userId))) {
         channel.members.push(userId);
         await channel.save();
       }
     }
+
+    console.log('✅ User joined workspace successfully');
 
     res.status(200).json({
       message: 'Successfully joined workspace',
@@ -179,7 +215,7 @@ exports.joinWorkspace = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Join workspace error:', error);
+    console.error('❌ Join workspace error:', error);
     res.status(500).json({ error: 'Failed to join workspace' });
   }
 };
@@ -199,7 +235,7 @@ exports.updateWorkspace = async (req, res) => {
 
     // Check if user is owner or admin
     const member = workspace.members.find(
-      m => m.userId.toString() === userId.toString()
+      m => compareIds(m.userId || m, userId)
     );
 
     if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
@@ -219,37 +255,42 @@ exports.updateWorkspace = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update workspace error:', error);
+    console.error('❌ Update workspace error:', error);
     res.status(500).json({ error: 'Failed to update workspace' });
   }
 };
 
-// Get workspace members
+// Get workspace members - FIXED VERSION
 exports.getWorkspaceMembers = async (req, res) => {
   try {
     const { workspaceId } = req.params;
     const userId = req.user.id;
 
+    console.log('📥 Fetching members for workspace:', workspaceId, 'User:', userId);
+
     const workspace = await Workspace.findById(workspaceId)
       .populate('members.userId', 'fullName email avatar status lastSeen');
 
     if (!workspace) {
+      console.log('❌ Workspace not found');
       return res.status(404).json({ error: 'Workspace not found' });
     }
 
     // Check if user is a member
-    const isMember = workspace.members.some(
-      member => member.userId._id.toString() === userId.toString()
-    );
-
-    if (!isMember) {
+    if (!isWorkspaceMember(workspace, userId)) {
+      console.log('❌ User not a workspace member');
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.status(200).json({ members: workspace.members });
+    console.log('✅ Found', workspace.members.length, 'members');
+
+    // Return properly formatted members
+    res.status(200).json({ 
+      members: workspace.members || [] 
+    });
 
   } catch (error) {
-    console.error('Get members error:', error);
+    console.error('❌ Get members error:', error);
     res.status(500).json({ error: 'Failed to fetch members' });
   }
 };
@@ -267,11 +308,7 @@ exports.switchWorkspace = async (req, res) => {
     }
 
     // Check if user is a member
-    const isMember = workspace.members.some(
-      member => member.userId.toString() === userId.toString()
-    );
-
-    if (!isMember) {
+    if (!isWorkspaceMember(workspace, userId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -280,13 +317,15 @@ exports.switchWorkspace = async (req, res) => {
       currentWorkspace: workspaceId,
     });
 
+    console.log('✅ Workspace switched successfully');
+
     res.status(200).json({
       message: 'Workspace switched successfully',
       workspaceId,
     });
 
   } catch (error) {
-    console.error('Switch workspace error:', error);
+    console.error('❌ Switch workspace error:', error);
     res.status(500).json({ error: 'Failed to switch workspace' });
   }
 };
