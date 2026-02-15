@@ -22,6 +22,10 @@ const generateToken = (userId) => {
 // @route   GET /api/auth/google
 // @desc    Initiate Google OAuth
 router.get('/google',
+  (req, res, next) => {
+    console.log(`🔐 Google OAuth initiated from: ${process.env.CLIENT_URL}`);
+    next();
+  },
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     session: false 
@@ -37,6 +41,8 @@ router.get('/google/callback',
   }),
   async (req, res) => {
     try {
+      console.log(`✅ Google OAuth callback received for user: ${req.user.email}`);
+      
       // Generate JWT token
       const token = generateToken(req.user._id);
 
@@ -52,8 +58,10 @@ router.get('/google/callback',
         .populate('workspaces')
         .populate('currentWorkspace');
 
-      // Redirect to frontend with token
-      res.redirect(`${process.env.CLIENT_URL}/auth/google/success?token=${token}&user=${encodeURIComponent(JSON.stringify({
+      // Build redirect URL
+      const successUrl = new URL(`${process.env.CLIENT_URL}/auth/google/success`);
+      successUrl.searchParams.append('token', token);
+      successUrl.searchParams.append('user', JSON.stringify({
         id: user._id,
         fullName: user.fullName,
         email: user.email,
@@ -62,10 +70,13 @@ router.get('/google/callback',
         statusMessage: user.statusMessage,
         workspaces: user.workspaces,
         currentWorkspace: user.currentWorkspace,
-      }))}`);
+      }));
+
+      console.log(`🎯 Redirecting to: ${successUrl.toString().split('user=')[0]}...`);
+      res.redirect(successUrl.toString());
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
-      res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+      console.error('❌ Google OAuth callback error:', error);
+      res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed&message=${encodeURIComponent(error.message)}`);
     }
   }
 );

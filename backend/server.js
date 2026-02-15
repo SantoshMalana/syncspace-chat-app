@@ -16,11 +16,18 @@ dotenv.config();
 require('./config/passport'); // ADD THIS LINE
 
 // Validate required environment variables
-const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET'];
+const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'CLIENT_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingEnvVars.length > 0) {
-  console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
-  console.error('Please check your .env file and ensure all required variables are set.');
+  console.error('❌ CRITICAL: Missing required environment variables:', missingEnvVars.join(', '));
+  console.error('Please check your .env file and ensure ALL required variables are set.');
+  console.error('\n📋 Required variables:');
+  console.error('  - MONGO_URI (MongoDB connection string)');
+  console.error('  - JWT_SECRET (JWT signing key)');
+  console.error('  - CLIENT_URL (Frontend URL)');
+  console.error('  - GOOGLE_CLIENT_ID (from Google Cloud Console)');
+  console.error('  - GOOGLE_CLIENT_SECRET (from Google Cloud Console)');
+  console.error('  - GOOGLE_CALLBACK_URL (OAuth callback URL)');
   process.exit(1);
 }
 
@@ -94,6 +101,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production', // true in production
+    httpOnly: true, // Prevent JavaScript access to session cookie
+    sameSite: 'lax', // Protect against CSRF attacks
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
@@ -372,9 +381,12 @@ app.use((err, req, res, next) => {
 // Start Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
+  console.log(`\n${'='.repeat(60)}`);
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 Client URL: ${process.env.CLIENT_URL}`);
-  console.log(`⚡ Socket.io ready for connections`);
   console.log(`🔐 Google OAuth enabled`);
+  console.log(`📛 Google Callback: ${process.env.GOOGLE_CALLBACK_URL}`);
+  console.log(`⚡ Socket.io ready for connections`);
+  console.log(`${'='.repeat(60)}\n`);
 });

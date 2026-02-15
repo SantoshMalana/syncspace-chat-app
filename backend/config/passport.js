@@ -13,9 +13,15 @@ passport.deserializeUser(async (id, done) => {
     const user = await User.findById(id);
     done(null, user);
   } catch (error) {
+    console.error('❌ Deserialize user error:', error);
     done(error, null);
   }
 });
+
+// Validate Google OAuth configuration
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
+  console.warn('⚠️  WARNING: Google OAuth environment variables not fully configured');
+}
 
 passport.use(
   new GoogleStrategy(
@@ -26,14 +32,18 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        console.log(`🔍 Processing Google OAuth for: ${profile.emails[0].value}`);
+        
         // Check if user already exists
         let user = await User.findOne({ email: profile.emails[0].value });
 
         if (user) {
-          // User exists, just return the user
+          console.log(`✅ Existing user found: ${user.email}`);
           return done(null, user);
         }
 
+        console.log(`👤 Creating new user from Google: ${profile.displayName}`);
+        
         // Create new user
         user = new User({
           fullName: profile.displayName,
@@ -44,6 +54,7 @@ passport.use(
         });
 
         await user.save();
+        console.log(`✅ User created: ${user._id}`);
 
         // Create default workspace for new user
         const slug = profile.displayName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
@@ -61,6 +72,7 @@ passport.use(
         });
 
         await workspace.save();
+        console.log(`✅ Workspace created: ${workspace._id}`);
 
         // Create default "general" channel
         const generalChannel = new Channel({
@@ -82,8 +94,10 @@ passport.use(
         user.currentWorkspace = workspace._id;
         await user.save();
 
+        console.log(`✅ OAuth user setup completed: ${user._id}`);
         return done(null, user);
       } catch (error) {
+        console.error('❌ Google OAuth strategy error:', error);
         return done(error, null);
       }
     }
