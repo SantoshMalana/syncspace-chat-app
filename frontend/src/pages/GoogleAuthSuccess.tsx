@@ -8,22 +8,32 @@ const GoogleAuthSuccess = () => {
   useEffect(() => {
     const token = searchParams.get('token');
     const userStr = searchParams.get('user');
+    const error = searchParams.get('error');
+
+    if (error) {
+      console.error('OAuth error:', error);
+      navigate(`/login?error=${error}`);
+      return;
+    }
 
     if (token && userStr) {
       try {
+        console.log('✅ Google authentication successful');
         const user = JSON.parse(decodeURIComponent(userStr));
         
         // Save to localStorage
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
 
+        console.log('📦 User data saved, redirecting to dashboard...');
         // Redirect to dashboard
         navigate('/dashboard');
       } catch (error) {
-        console.error('Error parsing user data:', error);
-        navigate('/login?error=auth_failed');
+        console.error('❌ Error parsing user data:', error);
+        navigate('/login?error=invalid_data');
       }
     } else {
+      console.error('❌ Missing token or user data');
       navigate('/login?error=missing_data');
     }
   }, [navigate, searchParams]);

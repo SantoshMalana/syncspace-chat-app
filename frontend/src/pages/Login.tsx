@@ -6,19 +6,31 @@ const Login = () => {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   // Show error message if redirected from Google OAuth failure
   useEffect(() => {
     const error = searchParams.get('error');
+    const message = searchParams.get('message');
+    
     if (error === 'google_auth_failed') {
-      alert('Google authentication failed. Please try again.');
+      console.error('❌ Google auth failed');
+      setErrorMessage('Google authentication failed. Please try again.');
     } else if (error === 'auth_failed') {
-      alert('Authentication failed. Please try again.');
+      console.error('❌ Auth failed:', message);
+      setErrorMessage(message || 'Authentication failed. Please try again.');
+    } else if (error === 'missing_data') {
+      console.error('❌ Missing OAuth data');
+      setErrorMessage('OAuth data was incomplete. Please try again.');
+    } else if (error === 'invalid_data') {
+      console.error('❌ Invalid OAuth data');
+      setErrorMessage('Failed to process authentication. Please try again.');
     }
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage("");
 
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
@@ -40,17 +52,18 @@ const Login = () => {
         // Redirect to dashboard
         navigate('/dashboard');
       } else {
-        // Show error message
-        alert(data.error || 'Login failed');
+        setErrorMessage(data.error || 'Login failed');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      alert('Unable to connect to server. Please try again.');
+      console.error('❌ Login error:', error);
+      setErrorMessage('Unable to connect to server. Please try again.');
     }
   };
 
   // Handle Google OAuth
   const handleGoogleLogin = () => {
+    console.log('🔐 Initiating Google OAuth login...');
+    console.log('🌐 API URL:', import.meta.env.VITE_API_URL);
     window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
   };
 
@@ -136,6 +149,13 @@ const Login = () => {
                 Sign in to your workspace
               </p>
             </div>
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                {errorMessage}
+              </div>
+            )}
 
             {/* Google Sign In Button */}
             <button
