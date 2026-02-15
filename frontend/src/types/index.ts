@@ -6,6 +6,7 @@ export interface User {
     fullName: string;
     email: string;
     avatar?: string;
+    avatarFrame?: string; // New field
     status: 'online' | 'away' | 'busy' | 'offline';
     statusMessage?: string;
     workspaces?: string[];
@@ -16,35 +17,33 @@ export interface Workspace {
     _id: string;
     name: string;
     slug: string;
-    description: string;
     ownerId: string;
-    members: WorkspaceMember[];
-    channels: string[];
-    icon?: string;
-    inviteCode?: string;
+    inviteCode: string;
+    members: { userId: string | User; role: string; joinedAt: string }[];
     createdAt: string;
     updatedAt: string;
-    id?: string; // For compatibility
-}
-
-export interface WorkspaceMember {
-    userId: User | string;
-    role: 'owner' | 'admin' | 'member';
-    joinedAt: string;
 }
 
 export interface Channel {
     _id: string;
     name: string;
-    description: string;
+    description?: string;
     workspaceId: string;
     isPrivate: boolean;
     members: string[];
-    createdBy: string;
-    topic?: string;
-    pinnedMessages?: string[];
     createdAt: string;
     updatedAt: string;
+}
+
+export interface ReadReceipt {
+    userId: string | User;
+    readAt: string;
+}
+
+export interface Report {
+    userId: string;
+    reason: string;
+    reportedAt: string;
 }
 
 export interface Message {
@@ -57,6 +56,8 @@ export interface Message {
     messageType: 'channel' | 'direct';
     attachments?: Attachment[];
     reactions?: Reaction[];
+    readBy?: ReadReceipt[]; // New field
+    reports?: Report[]; // New field
     threadId?: string;
     replyCount?: number;
     isEdited: boolean;

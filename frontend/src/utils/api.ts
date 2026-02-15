@@ -28,10 +28,16 @@ async function apiRequest<T>(
             ...getAuthHeaders(),
             ...options.headers,
         },
-        credentials: 'include', // ⭐ CRITICAL: This is what was missing!
+        credentials: 'include',
     };
 
     const response = await fetch(url, config);
+    
+    // Handle rate limit BEFORE parsing JSON
+    if (response.status === 429) {
+        throw new Error('Too many requests. Please wait a moment and refresh the page.');
+    }
+    
     const data = await response.json();
 
     if (!response.ok) {
@@ -108,6 +114,10 @@ export const channelAPI = {
 
     getById: (id: string) => apiRequest(`/api/channels/${id}`),
 
+    // NEW: Get channel details with populated members
+    getDetails: (id: string) =>
+        apiRequest(`/api/channels/${id}/details`),
+
     create: (data: any) =>
         apiRequest('/api/channels', {
             method: 'POST',
@@ -122,6 +132,19 @@ export const channelAPI = {
 
     delete: (id: string) =>
         apiRequest(`/api/channels/${id}`, {
+            method: 'DELETE',
+        }),
+
+    // NEW: Add member to channel by email
+    addMemberByEmail: (channelId: string, email: string) =>
+        apiRequest(`/api/channels/${channelId}/members`, {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        }),
+
+    // NEW: Remove member from channel
+    removeMember: (channelId: string, memberId: string) =>
+        apiRequest(`/api/channels/${channelId}/members/${memberId}`, {
             method: 'DELETE',
         }),
 
@@ -186,6 +209,17 @@ export const messageAPI = {
         const params = new URLSearchParams({ limit: limit.toString() });
         return apiRequest(`/api/messages/thread/${messageId}?${params}`);
     },
+
+    markAsRead: (messageId: string) =>
+        apiRequest(`/api/messages/${messageId}/read`, {
+            method: 'POST',
+        }),
+
+    reportMessage: (messageId: string, reason: string) =>
+        apiRequest(`/api/messages/${messageId}/report`, {
+            method: 'POST',
+            body: JSON.stringify({ reason }),
+        }),
 };
 
 // Upload APIs
@@ -200,7 +234,7 @@ export const uploadAPI = {
             headers: {
                 ...(token && { Authorization: `Bearer ${token}` }),
             },
-            credentials: 'include', // ⭐ CRITICAL: Added here too!
+            credentials: 'include',
             body: formData,
         });
 
@@ -221,7 +255,7 @@ export const uploadAPI = {
             headers: {
                 ...(token && { Authorization: `Bearer ${token}` }),
             },
-            credentials: 'include', // ⭐ CRITICAL: Added here too!
+            credentials: 'include',
             body: formData,
         });
 
