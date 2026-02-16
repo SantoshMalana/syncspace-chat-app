@@ -32,12 +32,12 @@ async function apiRequest<T>(
     };
 
     const response = await fetch(url, config);
-    
+
     // Handle rate limit BEFORE parsing JSON
     if (response.status === 429) {
         throw new Error('Too many requests. Please wait a moment and refresh the page.');
     }
-    
+
     const data = await response.json();
 
     if (!response.ok) {
@@ -68,6 +68,9 @@ export const authAPI = {
             method: 'PUT',
             body: JSON.stringify(data),
         }),
+
+    getProfileRestrictions: () =>
+        apiRequest('/api/auth/profile/restrictions'),
 
     logout: () =>
         apiRequest('/api/auth/logout', {
@@ -105,6 +108,18 @@ export const workspaceAPI = {
         }),
 
     getMembers: (id: string) => apiRequest(`/api/workspaces/${id}/members`),
+
+    inviteByEmail: (workspaceId: string, email: string) =>
+        apiRequest(`/api/workspaces/${workspaceId}/invite-by-email`, {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        }),
+
+    inviteByUserId: (workspaceId: string, userId: string) =>
+        apiRequest(`/api/workspaces/${workspaceId}/invite-by-id`, {
+            method: 'POST',
+            body: JSON.stringify({ userId }),
+        }),
 };
 
 // Channel APIs
@@ -114,7 +129,6 @@ export const channelAPI = {
 
     getById: (id: string) => apiRequest(`/api/channels/${id}`),
 
-    // NEW: Get channel details with populated members
     getDetails: (id: string) =>
         apiRequest(`/api/channels/${id}/details`),
 
@@ -135,16 +149,24 @@ export const channelAPI = {
             method: 'DELETE',
         }),
 
-    // NEW: Add member to channel by email
     addMemberByEmail: (channelId: string, email: string) =>
         apiRequest(`/api/channels/${channelId}/members`, {
             method: 'POST',
             body: JSON.stringify({ email }),
         }),
 
-    // NEW: Remove member from channel
     removeMember: (channelId: string, memberId: string) =>
         apiRequest(`/api/channels/${channelId}/members/${memberId}`, {
+            method: 'DELETE',
+        }),
+
+    promoteToAdmin: (channelId: string, memberId: string) =>
+        apiRequest(`/api/channels/${channelId}/admins/${memberId}`, {
+            method: 'POST',
+        }),
+
+    demoteFromAdmin: (channelId: string, memberId: string) =>
+        apiRequest(`/api/channels/${channelId}/admins/${memberId}`, {
             method: 'DELETE',
         }),
 
@@ -156,6 +178,27 @@ export const channelAPI = {
     leave: (id: string) =>
         apiRequest(`/api/channels/${id}/leave`, {
             method: 'POST',
+        }),
+
+    updatePrivacy: (id: string, isPrivate: boolean) =>
+        apiRequest(`/api/channels/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ isPrivate }),
+        }),
+
+    getFiles: (channelId: string, type?: 'media' | 'files') => {
+        const params = new URLSearchParams();
+        if (type) params.append('type', type);
+        return apiRequest(`/api/channels/${channelId}/files?${params}`);
+    },
+};
+
+// User APIs
+export const userAPI = {
+    updateChannelPreferences: (channelId: string, preferences: { muted?: boolean; mutedUntil?: string | null }) =>
+        apiRequest(`/api/users/preferences/${channelId}`, {
+            method: 'PUT',
+            body: JSON.stringify(preferences),
         }),
 };
 
@@ -187,6 +230,15 @@ export const messageAPI = {
 
     getUserConversations: (workspaceId: string) =>
         apiRequest(`/api/messages/conversations/${workspaceId}`),
+
+    searchMessages: (workspaceId: string, query: string, limit = 10) => {
+        const params = new URLSearchParams({
+            workspaceId,
+            query,
+            limit: limit.toString()
+        });
+        return apiRequest(`/api/messages/search?${params}`);
+    },
 
     editMessage: (id: string, content: string) =>
         apiRequest(`/api/messages/${id}`, {

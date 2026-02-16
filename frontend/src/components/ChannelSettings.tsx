@@ -10,6 +10,9 @@ interface ChannelSettingsProps {
     onRemoveMember: (userId: string) => void;
     onUpdateChannel: (data: { name?: string; description?: string; topic?: string }) => void;
     onDeleteChannel: () => void;
+    onUpdatePrivacy?: (isPrivate: boolean) => void;
+    onPromoteToAdmin?: (userId: string) => void;
+    onDemoteFromAdmin?: (userId: string) => void;
     isAdmin: boolean;
 }
 
@@ -22,13 +25,18 @@ const ChannelSettings = ({
     onRemoveMember,
     onUpdateChannel,
     onDeleteChannel,
+    onUpdatePrivacy,
+    onPromoteToAdmin,
+    onDemoteFromAdmin,
     isAdmin,
 }: ChannelSettingsProps) => {
-    const [activeTab, setActiveTab] = useState<'about' | 'members'>('about');
+    const [activeTab, setActiveTab] = useState<'about' | 'members' | 'permissions'>('about');
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState(channel.name);
     const [description, setDescription] = useState(channel.description || '');
     const [topic, setTopic] = useState(channel.topic || '');
+    const [isPrivate, setIsPrivate] = useState(channel.isPrivate || false);
+    const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
     
     // Add member states
     const [showAddMember, setShowAddMember] = useState(false);
@@ -45,6 +53,19 @@ const ChannelSettings = ({
         setIsEditing(false);
     };
 
+    const handleTogglePrivacy = async () => {
+        if (!onUpdatePrivacy) return;
+        setIsUpdatingPrivacy(true);
+        try {
+            await onUpdatePrivacy(!isPrivate);
+            setIsPrivate(!isPrivate);
+        } catch (error) {
+            console.error('Error updating channel privacy:', error);
+        } finally {
+            setIsUpdatingPrivacy(false);
+        }
+    };
+
     const handleAddMemberByEmail = () => {
         setAddError('');
         
@@ -53,7 +74,6 @@ const ChannelSettings = ({
             return;
         }
 
-        // Basic email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(memberEmail)) {
             setAddError('Please enter a valid email address');
@@ -78,14 +98,21 @@ const ChannelSettings = ({
         );
     });
 
-    const channelMemberIds = channel.members?.map(m => 
-        typeof m === 'object' ? (m._id || m.id) : m
-    ) || [];
+    const channelMemberIds = channel.members || [];
+    const channelAdminIds = channel.admins || [];
 
     const nonMembers = filteredMembers.filter(member => {
         const memberId = member._id || member.id;
         return !channelMemberIds.includes(memberId);
     });
+
+    // Check if current user is channel creator
+    const isCreator = channel.createdBy === currentUser.id || channel.createdBy === currentUser._id;
+
+    // Check if current user is channel admin
+    const isChannelAdmin = isAdmin || channelAdminIds.some(adminId => 
+        adminId === currentUser.id || adminId === currentUser._id
+    );
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -98,7 +125,11 @@ const ChannelSettings = ({
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold text-white">{channel.name}</h2>
-                            <p className="text-sm text-gray-500">{channel.members?.length || 0} members</p>
+                            <p className="text-sm text-gray-500">
+                                {channel.members?.length || 0} members
+                                {isChannelAdmin && <span className="ml-2 px-2 py-0.5 bg-primary/20 text-primary text-xs rounded">Admin</span>}
+                                {isCreator && <span className="ml-2 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded">Creator</span>}
+                            </p>
                         </div>
                     </div>
                     <button
@@ -131,16 +162,27 @@ const ChannelSettings = ({
                                 : 'text-gray-400 hover:text-white'
                         }`}
                     >
-                        Members
+                        Members ({channel.members?.length || 0})
                     </button>
+                    {isChannelAdmin && (
+                        <button
+                            onClick={() => setActiveTab('permissions')}
+                            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                                activeTab === 'permissions'
+                                    ? 'text-white border-b-2 border-primary'
+                                    : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            Permissions
+                        </button>
+                    )}
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6">
                     {activeTab === 'about' ? (
                         <div className="space-y-6">
-                            {/* Channel Info */}
-                            {isEditing && isAdmin ? (
+                            {isEditing && isChannelAdmin ? (
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-300 mb-2">Channel Name</label>
@@ -202,10 +244,34 @@ const ChannelSettings = ({
                                         </div>
                                     )}
                                     <div>
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Privacy</h3>
+                                        <div className="flex items-center justify-between p-4 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a]">
+                                            <div>
+                                                <p className="text-white font-medium">{isPrivate ? 'Private Channel' : 'Public Channel'}</p>
+                                                <p className="text-sm text-gray-500">{isPrivate ? 'Only members can see' : 'Anyone can join'}</p>
+                                            </div>
+                                            {isChannelAdmin && (
+                                                <button
+                                                    onClick={handleTogglePrivacy}
+                                                    disabled={isUpdatingPrivacy}
+                                                    className={`relative inline-flex h-6 w-11 rounded-full transition-colors ${
+                                                        isPrivate ? 'bg-primary' : 'bg-gray-600'
+                                                    } disabled:opacity-50`}
+                                                >
+                                                    <span
+                                                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                                                            isPrivate ? 'translate-x-5' : 'translate-x-0.5'
+                                                        } mt-0.5`}
+                                                    />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
                                         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Created</h3>
                                         <p className="text-gray-300">{new Date(channel.createdAt).toLocaleDateString()}</p>
                                     </div>
-                                    {isAdmin && (
+                                    {isChannelAdmin && (
                                         <button
                                             onClick={() => setIsEditing(true)}
                                             className="px-6 py-2 rounded-lg bg-[#1a1a1a] text-white hover:bg-[#2a2a2a] transition-all"
@@ -217,7 +283,7 @@ const ChannelSettings = ({
                             )}
 
                             {/* Danger Zone */}
-                            {isAdmin && channel.name !== 'general' && (
+                            {isChannelAdmin && channel.name !== 'general' && (
                                 <div className="pt-6 border-t border-[#1f1f1f]">
                                     <h3 className="text-sm font-semibold text-red-400 mb-3">Danger Zone</h3>
                                     <button
@@ -229,12 +295,12 @@ const ChannelSettings = ({
                                 </div>
                             )}
                         </div>
-                    ) : (
+                    ) : activeTab === 'members' ? (
                         <div className="space-y-4">
                             {/* Add Member Section */}
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-white">Channel Members</h3>
-                                {isAdmin && (
+                                {isChannelAdmin && (
                                     <button
                                         onClick={() => setShowAddMember(!showAddMember)}
                                         className="px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-secondary text-white text-sm font-medium hover:shadow-lg hover:shadow-primary/20 transition-all flex items-center gap-2"
@@ -248,7 +314,7 @@ const ChannelSettings = ({
                             </div>
 
                             {/* Add Member Panel */}
-                            {showAddMember && isAdmin && (
+                            {showAddMember && isChannelAdmin && (
                                 <div className="p-4 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a] space-y-4 mb-4">
                                     <div>
                                         <h4 className="text-sm font-semibold text-white mb-3">Add by Email</h4>
@@ -327,6 +393,10 @@ const ChannelSettings = ({
                                     if (!user) return null;
 
                                     const isCurrentUser = (user._id === currentUser._id) || (user.id === currentUser.id);
+                                    const isMemberAdmin = channelAdminIds.some(adminId => 
+                                        adminId === (user._id || user.id)
+                                    );
+                                    const isMemberCreator = channel.createdBy === (user._id || user.id);
 
                                     return (
                                         <div
@@ -348,21 +418,76 @@ const ChannelSettings = ({
                                                         {isCurrentUser && (
                                                             <span className="text-xs text-gray-500">(you)</span>
                                                         )}
+                                                        {isMemberCreator && (
+                                                            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded">Creator</span>
+                                                        )}
+                                                        {isMemberAdmin && !isMemberCreator && (
+                                                            <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded">Admin</span>
+                                                        )}
                                                     </p>
                                                     <p className="text-xs text-gray-500">{user.email}</p>
                                                 </div>
                                             </div>
-                                            {isAdmin && !isCurrentUser && (
-                                                <button
-                                                    onClick={() => onRemoveMember(user._id || user.id)}
-                                                    className="px-3 py-1 rounded bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 transition-colors"
-                                                >
-                                                    Remove
-                                                </button>
+                                            {isChannelAdmin && !isCurrentUser && !isMemberCreator && (
+                                                <div className="flex gap-2">
+                                                    {isMemberAdmin ? (
+                                                        onDemoteFromAdmin && (
+                                                            <button
+                                                                onClick={() => onDemoteFromAdmin(user._id || user.id)}
+                                                                className="px-3 py-1 rounded bg-orange-500/10 text-orange-400 text-sm hover:bg-orange-500/20 transition-colors"
+                                                                title="Remove admin"
+                                                            >
+                                                                Demote
+                                                            </button>
+                                                        )
+                                                    ) : (
+                                                        onPromoteToAdmin && (
+                                                            <button
+                                                                onClick={() => onPromoteToAdmin(user._id || user.id)}
+                                                                className="px-3 py-1 rounded bg-primary/20 text-primary text-sm hover:bg-primary/30 transition-colors"
+                                                                title="Make admin"
+                                                            >
+                                                                Promote
+                                                            </button>
+                                                        )
+                                                    )}
+                                                    <button
+                                                        onClick={() => onRemoveMember(user._id || user.id)}
+                                                        className="px-3 py-1 rounded bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 transition-colors"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     );
                                 })}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-3">Channel Permissions</h3>
+                                <p className="text-sm text-gray-400 mb-4">Manage who can perform actions in this channel</p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="p-4 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a]">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div>
+                                            <p className="text-white font-medium">Channel Admins</p>
+                                            <p className="text-sm text-gray-500">Can edit channel, manage members, and moderate content</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-400 mt-2">
+                                        {channelAdminIds.length} admin{channelAdminIds.length !== 1 ? 's' : ''}
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-[#1a1a1a] rounded-lg border border-[#2a2a2a]">
+                                    <p className="text-white font-medium mb-2">Posting Permissions</p>
+                                    <p className="text-sm text-gray-400">Currently: All members can post messages</p>
+                                </div>
                             </div>
                         </div>
                     )}

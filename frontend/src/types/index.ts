@@ -28,9 +28,14 @@ export interface Channel {
     _id: string;
     name: string;
     description?: string;
+    topic?: string;
     workspaceId: string;
     isPrivate: boolean;
     members: string[];
+    admins?: string[];
+    createdBy?: string;
+    allowMessagingByRole?: 'all' | 'admin' | 'moderator';
+    isArchived?: boolean;
     createdAt: string;
     updatedAt: string;
 }

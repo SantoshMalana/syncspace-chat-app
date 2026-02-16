@@ -10,6 +10,15 @@ import EmojiPickerComponent from '../components/EmojiPickerComponent';
 import MentionAutocomplete from '../components/MentionAutocomplete';
 import ProfilePanel from '../components/ProfilePanel';
 import ChannelSettings from '../components/ChannelSettings';
+import InviteMembers from '../components/InviteMembers';
+import ChannelContextMenu from '../components/ChannelContextMenu';
+import NotificationPreferences from '../components/NotificationPreferences';
+import ChannelDetailsMenu from '../components/ChannelDetailsMenu';
+import AddPeopleModal from '../components/AddPeopleModal';
+import WorkspaceMenu from '../components/WorkspaceMenu';
+import ChannelHeader from '../components/ChannelHeader';
+import SearchModal from '../components/SearchModal';
+import ChannelInfo from '../components/ChannelInfo';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -48,7 +57,6 @@ const Dashboard = () => {
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteLink, setInviteLink] = useState('');
 
   // Advanced features state
   const [showThreadPanel, setShowThreadPanel] = useState(false);
@@ -67,6 +75,17 @@ const Dashboard = () => {
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [activeProfileUser, setActiveProfileUser] = useState<User | null>(null);
   const [dmConversations, setDmConversations] = useState<any[]>([]);
+
+  // New UI components state
+  const [showChannelContextMenu, setShowChannelContextMenu] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [contextMenuChannel, setContextMenuChannel] = useState<Channel | null>(null);
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
+  const [showChannelDetailsMenu, setShowChannelDetailsMenu] = useState(false);
+  const [showAddPeopleModal, setShowAddPeopleModal] = useState(false);
+  const [showWorkspaceMenuModal, setShowWorkspaceMenuModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showChannelInfo, setShowChannelInfo] = useState(false);
 
   // Initialize on mount
   useEffect(() => {
@@ -114,9 +133,6 @@ const Dashboard = () => {
 
       setCurrentWorkspace(firstWorkspace);
       joinWorkspace(firstWorkspace._id);
-
-      // Generate invite link
-      setInviteLink(firstWorkspace.inviteCode);
 
       // Fetch workspace members
       await fetchWorkspaceMembers(firstWorkspace._id);
@@ -197,7 +213,6 @@ const Dashboard = () => {
       setCurrentWorkspace(newWorkspace);
       setShowCreateWorkspaceModal(false);
       setNewWorkspaceName('');
-      setInviteLink(newWorkspace.inviteCode);
 
       await fetchWorkspaceMembers(newWorkspace._id);
       await fetchChannelsForWorkspace(newWorkspace._id);
@@ -241,7 +256,6 @@ const Dashboard = () => {
       setShowWorkspaceMenu(false);
       setMessages([]);
       setActiveChannel(null);
-      setInviteLink(workspace.inviteCode);
 
       joinWorkspace(workspace._id);
 
@@ -283,7 +297,7 @@ const Dashboard = () => {
 
     socket.on('user:status', ({ userId, status }: { userId: string; status: string }) => {
       setWorkspaceMembers(prev => prev.map(m =>
-        (m._id === userId || m.id === userId) ? { ...m, status } : m
+        (m._id === userId || m.id === userId) ? { ...m, status: status as 'online' | 'away' | 'busy' | 'offline' } : m
       ));
     });
 
@@ -508,6 +522,19 @@ const Dashboard = () => {
     }
   }, [activeChannel, activeDMUser, messages, currentUser]);
 
+  // Keyboard shortcut for search modal (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearchModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setMessageInput(value);
@@ -621,10 +648,48 @@ const Dashboard = () => {
     }
   };
 
-  const copyInviteLink = () => {
-    if (inviteLink) {
-      navigator.clipboard.writeText(inviteLink);
-      alert('Invite code copied to clipboard!');
+  const handleUpdateChannelPrivacy = async (isPrivate: boolean) => {
+    if (!selectedChannel) return;
+
+    try {
+      await channelAPI.updatePrivacy(selectedChannel._id, isPrivate);
+      setSelectedChannel(prev => prev ? { ...prev, isPrivate } : null);
+      // Refresh channels list to update privacy indicator
+      await fetchChannelsForWorkspace(currentWorkspace!._id);
+    } catch (error: any) {
+      alert(error.message || 'Failed to update channel privacy');
+    }
+  };
+
+  const handlePromoteToAdmin = async (memberId: string) => {
+    if (!selectedChannel) return;
+    
+    try {
+      await channelAPI.promoteToAdmin(selectedChannel._id, memberId);
+      alert('Member promoted to admin successfully!');
+      
+      const channelData: any = await channelAPI.getDetails(selectedChannel._id);
+      setSelectedChannel(channelData.channel);
+      
+      await fetchChannelsForWorkspace(currentWorkspace!._id);
+    } catch (error: any) {
+      alert(error.message || 'Failed to promote member');
+    }
+  };
+
+  const handleDemoteFromAdmin = async (memberId: string) => {
+    if (!selectedChannel) return;
+    
+    try {
+      await channelAPI.demoteFromAdmin(selectedChannel._id, memberId);
+      alert('Admin demoted successfully!');
+      
+      const channelData: any = await channelAPI.getDetails(selectedChannel._id);
+      setSelectedChannel(channelData.channel);
+      
+      await fetchChannelsForWorkspace(currentWorkspace!._id);
+    } catch (error: any) {
+      alert(error.message || 'Failed to demote admin');
     }
   };
 
@@ -648,9 +713,44 @@ const Dashboard = () => {
   };
 
   const getInitials = (name: string) => {
-  if (!name || typeof name !== 'string') return '??';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase();
-};
+    if (!name || typeof name !== 'string') return 'U';
+    const names = name.trim().split(' ').filter(Boolean);
+    if (names.length === 0) return 'U';
+    if (names.length === 1) return names[0].slice(0, 2).toUpperCase();
+    return (names[0][0] + names[names.length - 1][0]).toUpperCase();
+  };
+
+  const handleLeaveChannel = async () => {
+    if (!activeChannel) return;
+    
+    if (activeChannel.name === 'general') {
+      alert('Cannot leave general channel');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to leave #${activeChannel.name}?`)) {
+      return;
+    }
+
+    try {
+      await channelAPI.leave(activeChannel._id);
+      await fetchChannelsForWorkspace(currentWorkspace!._id);
+      setActiveChannel(null);
+      setMessages([]);
+      alert('Left channel successfully!');
+    } catch (error: any) {
+      alert(error.message || 'Failed to leave channel');
+    }
+  };
+
+  // Check if user is channel admin
+  const isChannelAdmin = activeChannel ? (
+    activeChannel.admins?.some((adminId: any) => {
+      const aid = typeof adminId === 'object' ? adminId._id || adminId.id : adminId;
+      const uid = currentUser?._id || currentUser?.id;
+      return aid === uid;
+    }) || false
+  ) : false;
 
   // Check if user is admin
   const isWorkspaceAdmin = currentWorkspace?.members?.some((m: any) => {
@@ -729,7 +829,7 @@ const Dashboard = () => {
                 <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Switch Workspace</div>
                 {workspaces.map(ws => (
                   <button
-                    key={ws._id || ws.id}
+                    key={ws._id}
                     onClick={() => handleSwitchWorkspace(ws)}
                     className={`w-full text-left px-4 py-3 hover:bg-[#2a2a2a] transition-colors flex items-center justify-between ${currentWorkspace?._id === ws._id ? 'text-primary' : 'text-gray-300'}`}
                   >
@@ -787,19 +887,37 @@ const Dashboard = () => {
             </div>
 
             <div className="space-y-1">
-              {channels.map(channel => (
-                <button
-                  key={channel._id}
-                  onClick={() => selectChannel(channel)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${activeChannel?._id === channel._id
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
+              {channels.map(channel => {
+                const isAdmin = channel.admins?.some((adminId: any) => {
+                  const aid = typeof adminId === 'object' ? adminId._id : adminId;
+                  const uid = currentUser?._id || currentUser?.id;
+                  return aid === uid;
+                });
+                
+                return (
+                  <button
+                    key={channel._id}
+                    onClick={() => selectChannel(channel)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenuChannel(channel);
+                      setContextMenuPos({ x: e.clientX, y: e.clientY });
+                      setShowChannelContextMenu(true);
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${
+                      activeChannel?._id === channel._id
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
                     }`}
-                >
-                  <span className="text-lg">{channel.isPrivate ? '🔒' : '#'}</span>
-                  <span className="text-sm font-medium truncate">{channel.name}</span>
-                </button>
-              ))}
+                  >
+                    <span className="text-lg">{channel.isPrivate ? '🔒' : '#'}</span>
+                    <span className="text-sm font-medium truncate flex-1">{channel.name}</span>
+                    {isAdmin && (
+                      <span className="text-xs px-1.5 py-0.5 bg-primary/20 text-primary rounded">Admin</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -831,7 +949,15 @@ const Dashboard = () => {
                 />
               </div>
             )}
-
+            <button
+            onClick={() => setShowSearchModal(true)}
+            className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-white"
+            title="Search"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                </button>
             {/* DM List */}
             <div className="space-y-1">
               {(showUserSearch && userSearchQuery ? filteredMembers : dmConversations.slice(0, 8)).map((item: any) => {
@@ -894,49 +1020,38 @@ const Dashboard = () => {
       {/* Main Chat Area */}
       <main className="flex-1 flex flex-col">
 
-        {/* Channel Header */}
-        {(activeChannel || showDM) && (
-          <header className="h-16 bg-[#0a0a0a] border-b border-[#1f1f1f] px-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                {showDM && activeDMUser ? (
-                  <>
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-xs">
-                      {getInitials(activeDMUser.fullName)}
-                    </div>
-                    <span>{activeDMUser.fullName}</span>
-                  </>
-                ) : activeChannel ? (
-                  <>
-                    <span className="text-xl">{activeChannel.isPrivate ? '🔒' : '#'}</span>
-                    <span>{activeChannel.name}</span>
-                  </>
-                ) : null}
-              </h2>
-              {activeChannel && (
-                <p className="text-xs text-gray-500">{activeChannel.description || 'No description'}</p>
-              )}
-            </div>
-            {activeChannel && (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-500">{activeChannel.members?.length || 0} members</span>
-                <button
-                  onClick={() => handleOpenChannelSettings(activeChannel)}
-                  className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors"
-                  title="Channel settings"
-                >
-                  <svg className="w-5 h-5 text-gray-400 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              </div>
-            )}
-          </header>
-        )}
-
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          {/* Channel Header - ONLY ONE */}
+          {activeChannel && !showDM && (
+            <ChannelHeader
+              channelName={activeChannel.name}
+              description={activeChannel.description || undefined}
+              isPrivate={activeChannel.isPrivate || false}
+              memberCount={activeChannel.members?.length}
+              onShowInfo={() => setShowChannelInfo(true)}
+              onShowSettings={() => handleOpenChannelSettings(activeChannel)}
+              onSearch={() => setShowSearchModal(true)}
+              onAddPeople={() => setShowAddPeopleModal(true)}
+              isAdmin={isChannelAdmin}
+            />
+          )}
+
+          {/* DM Header */}
+          {showDM && activeDMUser && (
+            <header className="h-16 bg-[#0a0a0a] border-b border-[#1f1f1f] px-6 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-white font-semibold">
+                {getInitials(activeDMUser.fullName)}
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">{activeDMUser.fullName}</h2>
+                <p className="text-xs text-gray-500">{activeDMUser.email}</p>
+              </div>
+            </header>
+          )}
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {!activeChannel && !showDM ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
@@ -1004,6 +1119,7 @@ const Dashboard = () => {
           )}
 
           <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Message Input */}
@@ -1074,36 +1190,20 @@ const Dashboard = () => {
         )}
       </main>
 
-      {/* Invite Members Modal */}
+      {/* Invite Members Component */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-[#1a1a1a] p-6 rounded-2xl w-full max-w-md border border-[#2a2a2a]">
-            <h2 className="text-xl font-bold text-white mb-4">Invite Members to {currentWorkspace?.name}</h2>
-            <p className="text-gray-400 text-sm mb-4">Share this invite code with people you want to join your workspace:</p>
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={inviteLink}
-                readOnly
-                className="flex-1 px-4 py-3 rounded-lg bg-[#0f0f0f] border border-[#2a2a2a] text-white focus:outline-none"
-              />
-              <button
-                onClick={copyInviteLink}
-                className="px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/20 transition-all"
-              >
-                Copy
-              </button>
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+        <InviteMembers
+          workspace={currentWorkspace}
+          onClose={() => setShowInviteModal(false)}
+          onMemberInvited={(message) => {
+            console.log('✅', message);
+            // Refresh workspace members
+            if (currentWorkspace) {
+              fetchWorkspaceMembers(currentWorkspace._id);
+            }
+          }}
+          workspaceMembers={workspaceMembers}
+        />
       )}
 
       {/* Create Workspace Modal */}
@@ -1264,9 +1364,15 @@ const Dashboard = () => {
           user={activeProfileUser}
           currentUser={currentUser}
           onClose={() => setShowProfilePanel(false)}
-          onMessage={(userId) => {
+          onMessage={() => {
             setShowProfilePanel(false);
             handleSelectDMUser(activeProfileUser);
+          }}
+          onProfileUpdate={(updatedUser) => {
+            setActiveProfileUser(updatedUser);
+            if (currentUser.id === updatedUser.id || currentUser._id === updatedUser.id) {
+              setCurrentUser(updatedUser);
+            }
           }}
         />
       )}
@@ -1281,8 +1387,125 @@ const Dashboard = () => {
           onAddMember={handleAddMemberToChannel}
           onRemoveMember={handleRemoveMemberFromChannel}
           onUpdateChannel={handleUpdateChannel}
+          onUpdatePrivacy={handleUpdateChannelPrivacy}
           onDeleteChannel={handleDeleteChannel}
+          onPromoteToAdmin={handlePromoteToAdmin}
+          onDemoteFromAdmin={handleDemoteFromAdmin}
           isAdmin={isWorkspaceAdmin}
+        />
+      )}
+
+      {/* Channel Context Menu */}
+      {showChannelContextMenu && contextMenuChannel && (
+        <ChannelContextMenu
+          channel={contextMenuChannel}
+          x={contextMenuPos.x}
+          y={contextMenuPos.y}
+          onClose={() => setShowChannelContextMenu(false)}
+          onEdit={(channel) => {
+            setSelectedChannel(channel);
+            setShowChannelSettings(true);
+            setShowChannelContextMenu(false);
+          }}
+          onDelete={() => {
+            setShowChannelContextMenu(false);
+            // Will add delete functionality later
+          }}
+        />
+      )}
+
+      {/* Notification Preferences Modal */}
+      {showNotificationPrefs && activeChannel && (
+        <NotificationPreferences
+          channel={activeChannel.name}
+          onClose={() => setShowNotificationPrefs(false)}
+          onSave={(prefs) => {
+            console.log('Notification preferences saved:', prefs);
+          }}
+        />
+      )}
+
+      {/* Channel Details Menu */}
+      {showChannelDetailsMenu && activeChannel && (
+        <ChannelDetailsMenu
+          channel={activeChannel}
+          onClose={() => setShowChannelDetailsMenu(false)}
+          onNotifications={() => setShowNotificationPrefs(true)}
+          onStar={() => console.log('Star channel')}
+          onMoveChannel={() => console.log('Move channel')}
+          onAddTemplate={() => console.log('Add template')}
+          onAddWorkflow={() => console.log('Add workflow')}
+          onEditSettings={() => {
+            setSelectedChannel(activeChannel);
+            setShowChannelSettings(true);
+            setShowChannelDetailsMenu(false);
+          }}
+        />
+      )}
+
+      {/* Add People Modal */}
+      {showAddPeopleModal && activeChannel && (
+        <AddPeopleModal
+          channel={activeChannel.name}
+          onClose={() => setShowAddPeopleModal(false)}
+          onAdd={async (email) => {
+            try {
+              await channelAPI.addMemberByEmail(activeChannel._id, email);
+              alert('Member added successfully!');
+              const channelData: any = await channelAPI.getDetails(activeChannel._id);
+              setActiveChannel(channelData.channel);
+              await fetchChannelsForWorkspace(currentWorkspace!._id);
+              setShowAddPeopleModal(false);
+            } catch (error: any) {
+              alert(error.message || 'Failed to add member');
+            }
+          }}
+          workspaceMembers={workspaceMembers}
+          channelMembers={activeChannel.members || []}
+        />
+      )}
+
+      {/* Workspace Menu Modal */}
+      {showWorkspaceMenuModal && (
+        <WorkspaceMenu
+          workspaceName={currentWorkspace?.name || 'Workspace'}
+          onClose={() => setShowWorkspaceMenuModal(false)}
+          onBrowseTemplates={() => console.log('Browse templates')}
+          onInvitePeople={() => setShowInviteModal(true)}
+          onSettings={() => console.log('Settings')}
+        />
+      )}
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        workspaceMembers={workspaceMembers}
+        currentWorkspaceId={currentWorkspace?._id || ''}
+        onSelectUser={(user) => handleSelectDMUser(user)}
+        onSelectMessage={(message) => {
+          if (message.channelId) {
+            const channel = channels.find(c => c._id === message.channelId);
+            if (channel) {
+              selectChannel(channel);
+            }
+          }
+        }}
+      />
+
+      {/* Channel Info Panel (WhatsApp Style) */}
+      {showChannelInfo && activeChannel && currentUser && (
+        <ChannelInfo
+          channel={activeChannel}
+          currentUser={currentUser}
+          workspaceMembers={workspaceMembers}
+          onClose={() => setShowChannelInfo(false)}
+          onLeaveChannel={handleLeaveChannel}
+          onOpenSettings={() => {
+            setShowChannelInfo(false);
+            handleOpenChannelSettings(activeChannel);
+          }}
+          isAdmin={isChannelAdmin}
         />
       )}
     </div>
