@@ -21,7 +21,38 @@ const EmojiPickerComponent = ({ onEmojiSelect, onClose }: EmojiPickerComponentPr
     }, [onClose]);
 
     return (
-        <div ref={pickerRef} className="absolute bottom-full mb-2 z-50">
+        <div 
+            ref={pickerRef} 
+            className="absolute bottom-full mb-2 z-50"
+            style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+            }}
+        >
+            <style>{`
+                div.epr-main::-webkit-scrollbar,
+                div.epr-main::-webkit-scrollbar-track,
+                div.epr-main::-webkit-scrollbar-thumb {
+                    width: 0 !important;
+                    height: 0 !important;
+                    display: none !important;
+                }
+                div.epr-main {
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
+                }
+                div.epr-body::-webkit-scrollbar,
+                div.epr-body::-webkit-scrollbar-track,
+                div.epr-body::-webkit-scrollbar-thumb {
+                    width: 0 !important;
+                    height: 0 !important;
+                    display: none !important;
+                }
+                div.epr-body {
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
+                }
+            `}</style>
             <EmojiPicker
                 onEmojiClick={(emojiData) => {
                     onEmojiSelect(emojiData.emoji);

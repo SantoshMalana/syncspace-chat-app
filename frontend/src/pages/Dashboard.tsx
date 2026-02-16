@@ -13,12 +13,19 @@ import ChannelSettings from '../components/ChannelSettings';
 import InviteMembers from '../components/InviteMembers';
 import ChannelContextMenu from '../components/ChannelContextMenu';
 import NotificationPreferences from '../components/NotificationPreferences';
+// Add these imports with your other component imports (around line 15-20)
+import { useCall } from '../hooks/useCall';
+import { IncomingCallModal } from '../components/calls/IncomingCallModal';
+import { VoiceCallModal } from '../components/calls/VoiceCallModal';
+import { CallButton } from '../components/calls/CallButton';
 import ChannelDetailsMenu from '../components/ChannelDetailsMenu';
 import AddPeopleModal from '../components/AddPeopleModal';
 import WorkspaceMenu from '../components/WorkspaceMenu';
 import ChannelHeader from '../components/ChannelHeader';
 import SearchModal from '../components/SearchModal';
 import ChannelInfo from '../components/ChannelInfo';
+import { BookmarksPanel } from '../components/BookmarksPanel';
+import { MediaFilesPanel } from '../components/MediaFilesPanel';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -38,6 +45,16 @@ const Dashboard = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageInput, setMessageInput] = useState('');
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [bookmarkedMessages, setBookmarkedMessages] = useState<Set<string>>(new Set());
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showMediaFiles, setShowMediaFiles] = useState(false);
+
+  // Unread tracking state
+  const [unreadChannels, setUnreadChannels] = useState<Set<string>>(new Set());
+  const [unreadDMs, setUnreadDMs] = useState<Map<string, number>>(new Map());
+
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'info' }>>([]);
 
   // UI state
   const [loading, setLoading] = useState(true);
@@ -57,6 +74,17 @@ const Dashboard = () => {
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  // Add this after your existing hooks, before useEffect
+// ============ CALL FUNCTIONALITY ============
+const {
+  callState,
+  incomingCall,
+  initiateCall,
+  acceptCall,
+  declineCall,
+  endCall,
+  toggleMute,
+} = useCall();
 
   // Advanced features state
   const [showThreadPanel, setShowThreadPanel] = useState(false);
@@ -86,6 +114,7 @@ const Dashboard = () => {
   const [showWorkspaceMenuModal, setShowWorkspaceMenuModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
+  const [showKeybindsModal, setShowKeybindsModal] = useState(false);
 
   // Initialize on mount
   useEffect(() => {
@@ -93,6 +122,24 @@ const Dashboard = () => {
     return () => {
       disconnectSocket();
     };
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Cmd+K or Ctrl+K for keyboard shortcuts
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowKeybindsModal(true);
+      }
+      // Cmd+/ or Ctrl+/ for help (alternative)
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setShowKeybindsModal(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
   const initializeApp = async () => {
@@ -273,6 +320,29 @@ const Dashboard = () => {
     socket.on('message:new', (message: Message) => {
       setMessages(prev => [...prev, message]);
       scrollToBottom();
+      
+      // Mark as unread if from another user and we're not viewing it
+      const senderIdStr = typeof message.senderId === 'object' ? message.senderId._id : message.senderId;
+      const currentUserIdStr = currentUser?.id || currentUser?._id;
+      
+      if (senderIdStr !== currentUserIdStr) {
+        // Channel message unread
+        if (message.channelId && message.channelId !== activeChannel?._id) {
+          setUnreadChannels(prev => new Set([...prev, message.channelId!]));
+        }
+        // Direct message unread
+        if (message.messageType === 'direct' && senderIdStr) {
+          const activeDMUserIdStr = activeDMUser?._id || activeDMUser?.id;
+          if (senderIdStr !== activeDMUserIdStr) {
+            setUnreadDMs(prev => {
+              const newMap = new Map(prev);
+              const current = newMap.get(senderIdStr) || 0;
+              newMap.set(senderIdStr, current + 1);
+              return newMap;
+            });
+          }
+        }
+      }
     });
 
     socket.on('message:updated', (message: Message) => {
@@ -339,6 +409,13 @@ const Dashboard = () => {
     setShowDM(false);
     setMessageInput('');
     joinChannel(channel._id);
+    
+    // Mark channel as read
+    setUnreadChannels(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(channel._id);
+      return newSet;
+    });
 
     try {
       const messagesData: any = await messageAPI.getChannelMessages(channel._id);
@@ -350,7 +427,7 @@ const Dashboard = () => {
   };
 
   const sendMessage = async () => {
-    if (!messageInput.trim() || !currentWorkspace || !currentUser) return;
+    if ((!messageInput.trim() && selectedFiles.length === 0) || !currentWorkspace || !currentUser) return;
     if (!activeChannel && !activeDMUser) return;
 
     try {
@@ -573,6 +650,14 @@ const Dashboard = () => {
     setActiveChannel(null);
     setMessageInput('');
     setShowUserSearch(false);
+    
+    // Mark DM as read
+    const userId = user._id || user.id;
+    setUnreadDMs(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(userId);
+      return newMap;
+    });
 
     if (!currentWorkspace) return;
     try {
@@ -706,6 +791,20 @@ const Dashboard = () => {
     }
   };
 
+  const handleBookmarkMessage = (messageId: string) => {
+    setBookmarkedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+        showToast('Bookmark removed', 'info');
+      } else {
+        newSet.add(messageId);
+        showToast('Message bookmarked', 'success');
+      }
+      return newSet;
+    });
+  };
+
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -720,11 +819,19 @@ const Dashboard = () => {
     return (names[0][0] + names[names.length - 1][0]).toUpperCase();
   };
 
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now().toString();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  };
+
   const handleLeaveChannel = async () => {
     if (!activeChannel) return;
     
     if (activeChannel.name === 'general') {
-      alert('Cannot leave general channel');
+      showToast('Cannot leave general channel', 'error');
       return;
     }
 
@@ -737,9 +844,9 @@ const Dashboard = () => {
       await fetchChannelsForWorkspace(currentWorkspace!._id);
       setActiveChannel(null);
       setMessages([]);
-      alert('Left channel successfully!');
+      showToast(`Left #${activeChannel.name} successfully`, 'success');
     } catch (error: any) {
-      alert(error.message || 'Failed to leave channel');
+      showToast(error.message || 'Failed to leave channel', 'error');
     }
   };
 
@@ -893,6 +1000,7 @@ const Dashboard = () => {
                   const uid = currentUser?._id || currentUser?.id;
                   return aid === uid;
                 });
+                const hasUnread = unreadChannels.has(channel._id);
                 
                 return (
                   <button
@@ -911,8 +1019,11 @@ const Dashboard = () => {
                     }`}
                   >
                     <span className="text-lg">{channel.isPrivate ? '🔒' : '#'}</span>
-                    <span className="text-sm font-medium truncate flex-1">{channel.name}</span>
-                    {isAdmin && (
+                    <span className={`text-sm font-medium truncate flex-1 ${hasUnread ? 'font-bold text-white' : ''}`}>{channel.name}</span>
+                    {hasUnread && (
+                      <span className="w-2 h-2 bg-primary rounded-full"></span>
+                    )}
+                    {isAdmin && activeChannel?._id !== channel._id && (
                       <span className="text-xs px-1.5 py-0.5 bg-primary/20 text-primary rounded">Admin</span>
                     )}
                   </button>
@@ -982,7 +1093,12 @@ const Dashboard = () => {
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-[#141414] rounded-full"></div>
                       )}
                     </div>
-                    <span className="text-sm font-medium truncate">{user.fullName}</span>
+                    <span className="text-sm font-medium truncate flex-1">{user.fullName}</span>
+                    {unreadDMs.get(user._id || user.id) ? (
+                      <span className="flex items-center justify-center w-6 h-6 bg-primary text-white text-xs font-bold rounded-full">
+                        {Math.min(unreadDMs.get(user._id || user.id) || 0, 9)}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -1034,6 +1150,8 @@ const Dashboard = () => {
               onSearch={() => setShowSearchModal(true)}
               onAddPeople={() => setShowAddPeopleModal(true)}
               isAdmin={isChannelAdmin}
+              onShowBookmarks={() => setShowBookmarks(true)}
+              onShowMediaFiles={() => setShowMediaFiles(true)}
             />
           )}
 
@@ -1101,20 +1219,29 @@ const Dashboard = () => {
                   onShowThread={handleShowThread}
                   onShowProfile={handleShowProfile}
                   onReport={handleReportMessage}
+                  onBookmark={() => handleBookmarkMessage(message._id)}
+                  isBookmarked={bookmarkedMessages.has(message._id)}
                 />
               );
             })
           )}
 
           {/* Typing Indicator */}
-          {activeTypingUsers.length > 0 && activeTypingUsers[0] && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 italic">
+          {activeTypingUsers.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-gray-400 italic px-4 py-2 bg-[#0f0f0f] rounded">
               <div className="flex gap-1">
-                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
               </div>
-              <span>{activeTypingUsers[0].userName} is typing...</span>
+              <span>
+                {activeTypingUsers.length === 1 
+                  ? `${activeTypingUsers[0].userName} is typing...`
+                  : activeTypingUsers.length === 2
+                  ? `${activeTypingUsers[0].userName} and ${activeTypingUsers[1].userName} are typing...`
+                  : `${activeTypingUsers.length} people are typing...`
+                }
+              </span>
             </div>
           )}
 
@@ -1180,7 +1307,7 @@ const Dashboard = () => {
               />
               <button
                 onClick={sendMessage}
-                disabled={!messageInput.trim()}
+                disabled={!messageInput.trim() && selectedFiles.length === 0}
                 className="px-6 py-3 rounded-lg bg-gradient-to-r from-primary to-secondary text-white font-medium hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 Send
@@ -1417,7 +1544,7 @@ const Dashboard = () => {
       {/* Notification Preferences Modal */}
       {showNotificationPrefs && activeChannel && (
         <NotificationPreferences
-          channel={activeChannel.name}
+          channelId={activeChannel._id}
           onClose={() => setShowNotificationPrefs(false)}
           onSave={(prefs) => {
             console.log('Notification preferences saved:', prefs);
@@ -1493,6 +1620,65 @@ const Dashboard = () => {
         }}
       />
 
+      {/* Keyboard Shortcuts Modal */}
+      {showKeybindsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-xl max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+            <div className="p-6 border-b border-[#2a2a2a] flex items-center justify-between sticky top-0 bg-[#1a1a1a]">
+              <h2 className="text-xl font-bold">Keyboard Shortcuts</h2>
+              <button
+                onClick={() => setShowKeybindsModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-300 uppercase">General</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Show shortcuts</span>
+                    <kbd className="px-2 py-1 bg-[#2a2a2a] text-gray-300 rounded text-xs">⌘K / Ctrl+K</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Search messages</span>
+                    <kbd className="px-2 py-1 bg-[#2a2a2a] text-gray-300 rounded text-xs">⌘/ / Ctrl+/</kbd>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-300 uppercase">Messages</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Send message</span>
+                    <kbd className="px-2 py-1 bg-[#2a2a2a] text-gray-300 rounded text-xs">Enter</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Copy message</span>
+                    <kbd className="px-2 py-1 bg-[#2a2a2a] text-gray-300 rounded text-xs">Hover & Click</kbd>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-300 uppercase">Features</h3>
+                <div className="space-y-2 text-sm">
+                  <p className="text-gray-400">• Use @ to mention members</p>
+                  <p className="text-gray-400">• Use emoji reactions on messages</p>
+                  <p className="text-gray-400">• Reply in threads for organized discussions</p>
+                  <p className="text-gray-400">• Check unread indicators for new messages</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Channel Info Panel (WhatsApp Style) */}
       {showChannelInfo && activeChannel && currentUser && (
         <ChannelInfo
@@ -1508,6 +1694,53 @@ const Dashboard = () => {
           isAdmin={isChannelAdmin}
         />
       )}
+
+      {/* Bookmarks Panel */}
+      {showBookmarks && (
+        <BookmarksPanel
+          messages={messages}
+          bookmarkedMessageIds={bookmarkedMessages}
+          onRemoveBookmark={handleBookmarkMessage}
+          onClose={() => setShowBookmarks(false)}
+        />
+      )}
+
+      {/* Media & Files Panel */}
+      {showMediaFiles && activeChannel && (
+        <MediaFilesPanel
+          messages={messages}
+          onClose={() => setShowMediaFiles(false)}
+        />
+      )}
+
+      {/* Toast Notifications */}
+      <div className="fixed bottom-6 right-6 space-y-2 z-[100]">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 ${
+              toast.type === 'success' ? 'bg-green-500/90' :
+              toast.type === 'error' ? 'bg-red-500/90' :
+              'bg-blue-500/90'
+            } text-white`}
+          >
+            {toast.type === 'success' ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            ) : toast.type === 'error' ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2z" clipRule="evenodd" />
+              </svg>
+            )}
+            <span className="text-sm font-medium">{toast.message}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

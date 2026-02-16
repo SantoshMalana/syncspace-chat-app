@@ -13,6 +13,8 @@ interface MessageItemProps {
     onShowThread: (message: Message) => void;
     onShowProfile: (user: User) => void;
     onReport: (messageId: string) => void;
+    onBookmark?: () => void;
+    isBookmarked?: boolean;
 }
 
 const MessageItem = ({
@@ -25,6 +27,8 @@ const MessageItem = ({
     onShowThread,
     onShowProfile,
     onReport,
+    onBookmark,
+    isBookmarked,
 }: MessageItemProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(message.content);
@@ -61,6 +65,24 @@ const MessageItem = ({
     const formatTime = (dateString: string) => {
         const date = new Date(dateString);
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const formatFullDate = (dateString: string) => {
+        const date = new Date(dateString);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const isToday = date.toDateString() === today.toDateString();
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+        
+        if (isToday) {
+            return `Today at ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+        } else if (isYesterday) {
+            return `Yesterday at ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+        } else {
+            return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
     };
 
     const renderContent = () => {
@@ -215,7 +237,12 @@ const MessageItem = ({
                     >
                         {sender?.fullName || 'Unknown'}
                     </button>
-                    <span className="text-xs text-gray-500">{formatTime(message.createdAt)}</span>
+                    <span 
+                        className="text-xs text-gray-500 cursor-help hover:text-gray-300 transition-colors" 
+                        title={formatFullDate(message.createdAt)}
+                    >
+                        {formatTime(message.createdAt)}
+                    </span>
                     {message.isEdited && <span className="text-xs text-gray-600 italic">(edited)</span>}
 
                     {/* Read Status Indicators (Ticks) */}
@@ -252,6 +279,8 @@ const MessageItem = ({
                 onReply={() => onReply(message)}
                 onReaction={() => setShowEmojiPicker(!showEmojiPicker)}
                 onReport={() => onReport(message._id)}
+                onBookmark={onBookmark}
+                isBookmarked={isBookmarked}
             />
 
             {showEmojiPicker && (
