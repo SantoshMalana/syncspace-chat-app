@@ -6,14 +6,14 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
-const passport = require('passport'); // ⭐ ADD THIS
-const session = require('express-session'); // ⭐ ADD THIS
+const passport = require('passport');
+const session = require('express-session');
 
 // Load environment variables
 dotenv.config();
 
 // ⭐ Initialize Passport Config
-require('./config/passport'); // ADD THIS LINE
+require('./config/passport');
 
 // Validate required environment variables
 const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'CLIENT_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
@@ -147,6 +147,9 @@ const messageRoutes = require('./routes/messageRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const fixRoutes = require('./routes/fixRoutes');
 const userRoutes = require('./routes/userRoutes');
+// ⭐ NEW: Call and Meeting routes
+const meetingRoutes = require('./routes/meetingRoutes');
+const callRoutes = require('./routes/callRoutes');
 
 // Apply rate limiting
 app.use('/api/auth/login', authLimiter);
@@ -160,6 +163,9 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/fix', fixRoutes);
 app.use('/api/users', userRoutes);
+// ⭐ NEW: Call and Meeting routes
+app.use('/api/meetings', meetingRoutes);
+app.use('/api/calls', callRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -181,6 +187,8 @@ app.get('/', (req, res) => {
       workspaces: '/api/workspaces',
       channels: '/api/channels',
       messages: '/api/messages',
+      meetings: '/api/meetings',
+      calls: '/api/calls',
     }
   });
 });
@@ -188,12 +196,15 @@ app.get('/', (req, res) => {
 // Socket.io connection handling
 const User = require('./models/User');
 const jwt = require('jsonwebtoken');
+// ⭐ NEW: Import socket handlers
+const callHandlers = require('./socket/callHandlers');
+const meetingHandlers = require('./socket/meetingHandlers');
 
 // Store online users
 const onlineUsers = new Map(); // userId -> socketId
 
 // Socket.io authentication middleware
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -202,6 +213,20 @@ io.use((socket, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = decoded.id;
+    
+    // ⭐ NEW: Fetch user details and attach to socket for call/meeting handlers
+    const user = await User.findById(decoded.id).select('name email avatar');
+    if (!user) {
+      return next(new Error('Authentication error: User not found'));
+    }
+    
+    socket.user = {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar
+    };
+    
     next();
   } catch (error) {
     console.error('Socket authentication error:', error.message);
@@ -210,7 +235,7 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('🔌 User connected:', socket.id);
+  console.log('🔌 User connected:', socket.id, socket.user?.name);
 
   // User joins with their ID
   socket.on('user:online', async (userId) => {
@@ -232,6 +257,18 @@ io.on('connection', (socket) => {
       console.error('Error setting user online:', error);
     }
   });
+
+  // ⭐ NEW: Join user's personal room for direct notifications (calls/meetings)
+  if (socket.user) {
+    socket.join(socket.user.id);
+    console.log(`User ${socket.user.name} joined personal room: ${socket.user.id}`);
+  }
+
+  // ⭐ NEW: Initialize call handlers
+  callHandlers(io, socket);
+
+  // ⭐ NEW: Initialize meeting handlers
+  meetingHandlers(io, socket);
 
   // User joins a workspace room
   socket.on('workspace:join', (workspaceId) => {
@@ -390,5 +427,6 @@ server.listen(PORT, () => {
   console.log(`🔐 Google OAuth enabled`);
   console.log(`📛 Google Callback: ${process.env.GOOGLE_CALLBACK_URL}`);
   console.log(`⚡ Socket.io ready for connections`);
+  console.log(`📞 Call & Meeting features enabled`);
   console.log(`${'='.repeat(60)}\n`);
 });
