@@ -24,4 +24,7 @@ router.get('/thread/:messageId', authenticate, messageController.getThreadReplie
 router.post('/:messageId/read', authenticate, messageController.markAsRead);
 router.post('/:messageId/report', authenticate, messageController.reportMessage);
 
+// Search messages
+router.get('/search', authenticate, messageController.searchMessages);
+
 module.exports = router;

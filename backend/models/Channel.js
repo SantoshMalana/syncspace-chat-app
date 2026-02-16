@@ -36,6 +36,20 @@ const channelSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Message',
   }],
+  // Admin controls
+  admins: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+  allowMessagingByRole: {
+    type: String,
+    enum: ['all', 'admin', 'moderator'],
+    default: 'all',
+  },
+  isArchived: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
 });

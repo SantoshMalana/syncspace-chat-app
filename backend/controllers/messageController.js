@@ -599,3 +599,68 @@ exports.getThreadReplies = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch thread replies' });
   }
 };
+
+// Search messages
+exports.searchMessages = async (req, res) => {
+  try {
+    const { workspaceId, query } = req.query;
+    const userId = req.user.id;
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (!query || !query.trim()) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+
+    console.log('🔍 Searching messages:', { workspaceId, query, userId });
+
+    const Workspace = require('../models/Workspace');
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    const isMember = workspace.members.some(m => {
+      const memberId = m.userId || m;
+      return memberId.toString() === userId.toString();
+    });
+
+    if (!isMember) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const userChannels = await Channel.find({
+      workspaceId,
+      members: userId,
+    }).select('_id');
+
+    const channelIds = userChannels.map(ch => ch._id);
+
+    const messages = await Message.find({
+      workspaceId,
+      $or: [
+        { channelId: { $in: channelIds } },
+        { 
+          messageType: 'direct',
+          $or: [
+            { senderId: userId },
+            { recipientId: userId }
+          ]
+        }
+      ],
+      content: { $regex: query, $options: 'i' },
+      isDeleted: false,
+    })
+      .populate('senderId', 'fullName email avatar')
+      .populate('recipientId', 'fullName email avatar')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    console.log('✅ Found', messages.length, 'messages');
+
+    res.status(200).json({ messages });
+
+  } catch (error) {
+    console.error('❌ Search messages error:', error);
+    res.status(500).json({ error: 'Failed to search messages' });
+  }
+};

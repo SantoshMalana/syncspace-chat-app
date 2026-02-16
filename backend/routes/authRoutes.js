@@ -241,16 +241,55 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
-// Update user profile
+// Update user profile with restrictions
 router.put('/profile', authenticate, async (req, res) => {
   try {
     const { fullName, avatar, statusMessage, status, timezone } = req.body;
     const userId = req.user._id;
 
     const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    if (fullName) user.fullName = fullName;
-    if (avatar !== undefined) user.avatar = avatar;
+    // Check name change restriction (1 time per 15 days)
+    if (fullName && fullName !== user.fullName) {
+      if (user.lastNameChangeDate) {
+        const daysSinceChange = Math.floor((new Date() - user.lastNameChangeDate) / (1000 * 60 * 60 * 24));
+        if (daysSinceChange < 15) {
+          return res.status(400).json({ 
+            error: `You can change your name again in ${15 - daysSinceChange} days`,
+            daysRemaining: 15 - daysSinceChange
+          });
+        }
+      }
+      user.fullName = fullName;
+      user.lastNameChangeDate = new Date();
+    }
+
+    // Check avatar change restriction (3 times per month)
+    if (avatar && avatar !== user.avatar) {
+      const currentMonthYear = new Date().toISOString().slice(0, 7); // YYYY-MM
+      
+      // Check if it's a new month
+      if (user.lastAvatarChangeMonthYear !== currentMonthYear) {
+        user.avatarChangesThisMonth = 0;
+        user.lastAvatarChangeMonthYear = currentMonthYear;
+      }
+
+      if (user.avatarChangesThisMonth >= 3) {
+        return res.status(400).json({ 
+          error: 'You can change your avatar 3 times per month. Please try again next month.',
+          changesThisMonth: 3,
+          resetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString()
+        });
+      }
+
+      user.avatar = avatar;
+      user.avatarChangesThisMonth += 1;
+    }
+
+    // Allow these updates without restrictions
     if (statusMessage !== undefined) user.statusMessage = statusMessage;
     if (status) user.status = status;
     if (timezone) user.timezone = timezone;
@@ -267,12 +306,47 @@ router.put('/profile', authenticate, async (req, res) => {
         status: user.status,
         statusMessage: user.statusMessage,
         timezone: user.timezone,
+        lastNameChangeDate: user.lastNameChangeDate,
+        avatarChangesThisMonth: user.avatarChangesThisMonth,
       },
     });
 
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Get profile update status (to show restrictions UI)
+router.get('/profile/restrictions', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const currentMonthYear = new Date().toISOString().slice(0, 7);
+    let daysUntilNameChange = 0;
+    
+    if (user.lastNameChangeDate) {
+      const daysSinceChange = Math.floor((new Date() - user.lastNameChangeDate) / (1000 * 60 * 60 * 24));
+      daysUntilNameChange = Math.max(0, 15 - daysSinceChange);
+    }
+
+    const avatarChangesRemaining = 3 - (user.lastAvatarChangeMonthYear === currentMonthYear ? user.avatarChangesThisMonth : 0);
+
+    res.status(200).json({
+      canChangeName: daysUntilNameChange === 0,
+      daysUntilNameChange,
+      avatarChangesRemaining,
+      totalAvatarChanges: 3,
+    });
+
+  } catch (error) {
+    console.error('Get profile restrictions error:', error);
+    res.status(500).json({ error: 'Failed to fetch restrictions' });
   }
 });
 

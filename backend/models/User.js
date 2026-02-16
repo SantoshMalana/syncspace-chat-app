@@ -43,6 +43,27 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'UTC',
   },
+  // Profile update tracking
+  lastNameChangeDate: {
+    type: Date,
+    default: null,
+  },
+  avatarChangesThisMonth: {
+    type: Number,
+    default: 0,
+  },
+  lastAvatarChangeMonthYear: {
+    type: String,
+    default: null,
+  },
+  // Channel specific preferences
+  channelPreferences: {
+    type: Map,
+    of: new mongoose.Schema({
+      muted: { type: Boolean, default: false },
+      mutedUntil: { type: Date, default: null },
+    }, { _id: false })
+  },
 }, {
   timestamps: true,
 });

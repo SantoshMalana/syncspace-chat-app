@@ -329,3 +329,182 @@ exports.switchWorkspace = async (req, res) => {
     res.status(500).json({ error: 'Failed to switch workspace' });
   }
 };
+
+// ========================================
+// INVITE MEMBERS ENDPOINTS
+// ========================================
+
+// Invite member by email
+exports.inviteByEmail = async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const { email } = req.body;
+    const userId = req.user.id;
+
+    console.log(`📧 Inviting user by email: ${email} to workspace: ${workspaceId}`);
+
+    // Validate input
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Get workspace
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if requester is an admin or owner
+    const requesterRole = workspace.members.find(m => compareIds(m.userId, userId));
+    if (!requesterRole || !['owner', 'admin'].includes(requesterRole.role)) {
+      return res.status(403).json({ error: 'Only admins and owners can invite members' });
+    }
+
+    // Find user by email
+    const userToInvite = await User.findOne({ email: email.toLowerCase().trim() }).select('-password');
+    if (!userToInvite) {
+      return res.status(404).json({ error: 'User with this email not found. They must have a registered SyncSpace account.' });
+    }
+
+    // Check if already a member
+    if (isWorkspaceMember(workspace, userToInvite._id)) {
+      return res.status(400).json({ error: 'User is already a member of this workspace' });
+    }
+
+    // Add user to workspace
+    workspace.members.push({
+      userId: userToInvite._id,
+      role: 'member',
+      joinedAt: new Date(),
+    });
+    await workspace.save();
+
+    // Add workspace to user's list
+    await User.findByIdAndUpdate(userToInvite._id, {
+      $addToSet: { workspaces: workspace._id },
+    });
+
+    // Add user to all public channels
+    const publicChannels = await Channel.find({
+      workspaceId: workspace._id,
+      isPrivate: false,
+    });
+
+    for (let channel of publicChannels) {
+      if (!channel.members.some(m => compareIds(m, userToInvite._id))) {
+        channel.members.push(userToInvite._id);
+        await channel.save();
+      }
+    }
+
+    console.log(`✅ User ${userToInvite.email} invited to workspace successfully`);
+
+    res.status(200).json({
+      message: `${userToInvite.fullName} has been invited to ${workspace.name}`,
+      workspace: {
+        id: workspace._id,
+        name: workspace.name,
+        memberCount: workspace.members.length,
+      },
+      invitedUser: {
+        id: userToInvite._id,
+        fullName: userToInvite.fullName,
+        email: userToInvite.email,
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ Invite by email error:', error);
+    res.status(500).json({ error: 'Failed to invite member by email' });
+  }
+};
+
+// Invite member by user ID
+exports.inviteByUserId = async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const { userId: userIdToInvite } = req.body;
+    const userId = req.user.id;
+
+    console.log(`👥 Inviting user by ID: ${userIdToInvite} to workspace: ${workspaceId}`);
+
+    // Validate input
+    if (!userIdToInvite || !userIdToInvite.trim()) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    // Get workspace
+    const workspace = await Workspace.findById(workspaceId);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    // Check if requester is an admin or owner
+    const requesterRole = workspace.members.find(m => compareIds(m.userId, userId));
+    if (!requesterRole || !['owner', 'admin'].includes(requesterRole.role)) {
+      return res.status(403).json({ error: 'Only admins and owners can invite members' });
+    }
+
+    // Find user by ID
+    const userToInvite = await User.findById(userIdToInvite).select('-password');
+    if (!userToInvite) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if already a member
+    if (isWorkspaceMember(workspace, userToInvite._id)) {
+      return res.status(400).json({ error: 'User is already a member of this workspace' });
+    }
+
+    // Add user to workspace
+    workspace.members.push({
+      userId: userToInvite._id,
+      role: 'member',
+      joinedAt: new Date(),
+    });
+    await workspace.save();
+
+    // Add workspace to user's list
+    await User.findByIdAndUpdate(userToInvite._id, {
+      $addToSet: { workspaces: workspace._id },
+    });
+
+    // Add user to all public channels
+    const publicChannels = await Channel.find({
+      workspaceId: workspace._id,
+      isPrivate: false,
+    });
+
+    for (let channel of publicChannels) {
+      if (!channel.members.some(m => compareIds(m, userToInvite._id))) {
+        channel.members.push(userToInvite._id);
+        await channel.save();
+      }
+    }
+
+    console.log(`✅ User ${userToInvite.email} invited to workspace successfully`);
+
+    res.status(200).json({
+      message: `${userToInvite.fullName} has been invited to ${workspace.name}`,
+      workspace: {
+        id: workspace._id,
+        name: workspace.name,
+        memberCount: workspace.members.length,
+      },
+      invitedUser: {
+        id: userToInvite._id,
+        fullName: userToInvite.fullName,
+        email: userToInvite.email,
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ Invite by ID error:', error);
+    res.status(500).json({ error: 'Failed to invite member by ID' });
+  }
+};

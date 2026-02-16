@@ -146,6 +146,7 @@ const channelRoutes = require('./routes/channelRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const fixRoutes = require('./routes/fixRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 // Apply rate limiting
 app.use('/api/auth/login', authLimiter);
@@ -158,6 +159,7 @@ app.use('/api/channels', channelRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/fix', fixRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

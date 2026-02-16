@@ -1,36 +1,43 @@
 const express = require('express');
 const router = express.Router();
+const {
+    createChannel,
+    getWorkspaceChannels,
+    getChannelById,
+    getChannelDetails,
+    addMemberByEmail,
+    removeMemberFromChannel,
+    promoteToAdmin,
+    demoteFromAdmin,
+    joinChannel,
+    leaveChannel,
+    updateChannel,
+    deleteChannel,
+    getChannelFiles,
+} = require('../controllers/channelController');
+
 const { authenticate } = require('../middleware/authMiddleware');
-const channelController = require('../controllers/channelController');
 
-// Create channel
-router.post('/', authenticate, channelController.createChannel);
+// All routes require authentication
+router.use(authenticate);
 
-// Get workspace channels
-router.get('/workspace/:workspaceId', authenticate, channelController.getWorkspaceChannels);
+// Channel CRUD
+router.post('/', createChannel);
+router.get('/workspace/:workspaceId', getWorkspaceChannels);
+router.get('/:channelId', getChannelById);
+router.get('/:channelId/details', getChannelDetails);
+router.put('/:channelId', updateChannel);
+router.delete('/:channelId', deleteChannel);
+router.get('/:channelId/files', getChannelFiles);
 
-// Get channel by ID
-router.get('/:channelId', authenticate, channelController.getChannelById);
+// Member management
+router.post('/:channelId/members', addMemberByEmail);
+router.delete('/:channelId/members/:memberId', removeMemberFromChannel);
+router.post('/:channelId/join', joinChannel);
+router.post('/:channelId/leave', leaveChannel);
 
-// NEW: Get channel details (with populated members)
-router.get('/:channelId/details', authenticate, channelController.getChannelDetails);
-
-// NEW: Add member to channel by email
-router.post('/:channelId/members', authenticate, channelController.addMemberByEmail);
-
-// NEW: Remove member from channel
-router.delete('/:channelId/members/:memberId', authenticate, channelController.removeMemberFromChannel);
-
-// Join channel
-router.post('/:channelId/join', authenticate, channelController.joinChannel);
-
-// Leave channel
-router.post('/:channelId/leave', authenticate, channelController.leaveChannel);
-
-// Update channel
-router.put('/:channelId', authenticate, channelController.updateChannel);
-
-// Delete channel
-router.delete('/:channelId', authenticate, channelController.deleteChannel);
+// Admin management
+router.post('/:channelId/admins/:memberId', promoteToAdmin);
+router.delete('/:channelId/admins/:memberId', demoteFromAdmin);
 
 module.exports = router;
