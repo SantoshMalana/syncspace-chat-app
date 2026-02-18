@@ -5,9 +5,17 @@ import { io, Socket } from 'socket.io-client';
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 let socket: Socket | null = null;
+let socketInstance: any = null;
+
+export const setSocketInstance = (socket: any) => {
+    socketInstance = socket;
+};
 
 export const initializeSocket = (userId: string): Socket => {
-    if (socket?.connected) {
+    // ✅ FIX: Return existing socket if it exists at all (connected OR reconnecting).
+    // socket.io handles reconnection internally — creating a new socket during a
+    // brief disconnect causes a second connection with a different ID, breaking calls.
+    if (socket) {
         return socket;
     }
 
@@ -23,6 +31,8 @@ export const initializeSocket = (userId: string): Socket => {
         reconnectionDelay: 1000,
         reconnectionAttempts: 5,
     });
+
+    setSocketInstance(socket);
 
     socket.on('connect', () => {
         console.log('✅ Socket connected:', socket?.id);
@@ -46,8 +56,8 @@ export const initializeSocket = (userId: string): Socket => {
     return socket;
 };
 
-export const getSocket = (): Socket | null => {
-    return socket;
+export const getSocket = () => {
+    return socketInstance;
 };
 
 export const disconnectSocket = () => {

@@ -13,11 +13,8 @@ import ChannelSettings from '../components/ChannelSettings';
 import InviteMembers from '../components/InviteMembers';
 import ChannelContextMenu from '../components/ChannelContextMenu';
 import NotificationPreferences from '../components/NotificationPreferences';
-// Add these imports with your other component imports (around line 15-20)
-import { useCall } from '../hooks/useCall';
-import { IncomingCallModal } from '../components/calls/IncomingCallModal';
-import { VoiceCallModal } from '../components/calls/VoiceCallModal';
-import { CallButton } from '../components/calls/CallButton';
+import { useCallContext } from '../context/CallContext';
+import { useGroupCallContext } from '../context/GroupCallContext';
 import ChannelDetailsMenu from '../components/ChannelDetailsMenu';
 import AddPeopleModal from '../components/AddPeopleModal';
 import WorkspaceMenu from '../components/WorkspaceMenu';
@@ -26,6 +23,13 @@ import SearchModal from '../components/SearchModal';
 import ChannelInfo from '../components/ChannelInfo';
 import { BookmarksPanel } from '../components/BookmarksPanel';
 import { MediaFilesPanel } from '../components/MediaFilesPanel';
+// Meeting Components Imports
+import { useMeetingContext } from '../context/MeetingContext';
+import MeetingScheduler from '../components/meetings/MeetingScheduler';
+import ScheduledMeetingsList from '../components/meetings/ScheduledMeetingsList';
+import MeetingRoom from '../components/meetings/MeetingRoom';
+import MeetingNotification from '../components/meetings/MeetingNotification';
+import type { Meeting } from '../types/meeting.types';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -74,17 +78,36 @@ const Dashboard = () => {
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  // Add this after your existing hooks, before useEffect
-// ============ CALL FUNCTIONALITY ============
-const {
-  callState,
-  incomingCall,
-  initiateCall,
-  acceptCall,
-  declineCall,
-  endCall,
-  toggleMute,
-} = useCall();
+  // ============ CALL FUNCTIONALITY ============
+  const {
+    isCallActive,
+    mediaError,
+    initiateCall,
+  } = useCallContext();
+
+  // ============ GROUP CALL FUNCTIONALITY ============
+  const {
+    groupCall,
+    startGroupCall,
+  } = useGroupCallContext();
+
+  // ============ MEETING FUNCTIONALITY ============
+  const {
+    upcomingMeetings,
+    currentMeeting,
+    isInMeeting,
+    notifications: meetingNotifications,
+    createMeeting,
+    joinMeeting,
+    leaveMeeting,
+    endMeeting,
+  } = useMeetingContext();
+
+  // Meeting UI state
+  const [isSchedulerOpen, setIsSchedulerOpen] = useState(false);
+  const [isMeetingsListOpen, setIsMeetingsListOpen] = useState(false);
+  const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null);
+  const [meetingNotificationsDisplay, setMeetingNotificationsDisplay] = useState<any[]>([]);
 
   // Advanced features state
   const [showThreadPanel, setShowThreadPanel] = useState(false);
@@ -119,9 +142,11 @@ const {
   // Initialize on mount
   useEffect(() => {
     initializeApp();
-    return () => {
-      disconnectSocket();
-    };
+    // ✅ FIX: Do NOT call disconnectSocket() here.
+    // The socket lifecycle is owned by DashboardWrapper/CallProvider.
+    // Destroying the socket on Dashboard unmount breaks the call system.
+    // The socket is properly disconnected on logout via handleLogout().
+    return () => { };
   }, []);
 
   // Keyboard shortcuts
@@ -141,6 +166,39 @@ const {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
+
+  // ============ MEETING HANDLERS & LISTENERS ============
+  const handleJoinMeeting = (meeting: Meeting) => {
+    setActiveMeeting(meeting);
+    setIsMeetingsListOpen(false);
+    joinMeeting(meeting._id);
+  };
+
+  const handleLeaveMeeting = () => {
+    if (activeMeeting) {
+      leaveMeeting(activeMeeting._id);
+    }
+    setActiveMeeting(null);
+  };
+
+  const handleOpenScheduler = () => {
+    setIsSchedulerOpen(true);
+  };
+
+  const handleOpenMeetingsList = () => {
+    setIsMeetingsListOpen(true);
+  };
+
+  // Meeting socket listeners
+  useEffect(() => {
+    if (!meetingNotifications) return;
+
+    meetingNotifications.forEach((notification) => {
+      if (notification.type === 'reminder' || notification.type === 'started' || notification.type === 'invitation') {
+        setMeetingNotificationsDisplay((prev) => [...prev, notification]);
+      }
+    });
+  }, [meetingNotifications]);
 
   const initializeApp = async () => {
     try {
@@ -320,11 +378,11 @@ const {
     socket.on('message:new', (message: Message) => {
       setMessages(prev => [...prev, message]);
       scrollToBottom();
-      
+
       // Mark as unread if from another user and we're not viewing it
       const senderIdStr = typeof message.senderId === 'object' ? message.senderId._id : message.senderId;
       const currentUserIdStr = currentUser?.id || currentUser?._id;
-      
+
       if (senderIdStr !== currentUserIdStr) {
         // Channel message unread
         if (message.channelId && message.channelId !== activeChannel?._id) {
@@ -409,7 +467,7 @@ const {
     setShowDM(false);
     setMessageInput('');
     joinChannel(channel._id);
-    
+
     // Mark channel as read
     setUnreadChannels(prev => {
       const newSet = new Set(prev);
@@ -650,7 +708,7 @@ const {
     setActiveChannel(null);
     setMessageInput('');
     setShowUserSearch(false);
-    
+
     // Mark DM as read
     const userId = user._id || user.id;
     setUnreadDMs(prev => {
@@ -748,14 +806,14 @@ const {
 
   const handlePromoteToAdmin = async (memberId: string) => {
     if (!selectedChannel) return;
-    
+
     try {
       await channelAPI.promoteToAdmin(selectedChannel._id, memberId);
       alert('Member promoted to admin successfully!');
-      
+
       const channelData: any = await channelAPI.getDetails(selectedChannel._id);
       setSelectedChannel(channelData.channel);
-      
+
       await fetchChannelsForWorkspace(currentWorkspace!._id);
     } catch (error: any) {
       alert(error.message || 'Failed to promote member');
@@ -764,14 +822,14 @@ const {
 
   const handleDemoteFromAdmin = async (memberId: string) => {
     if (!selectedChannel) return;
-    
+
     try {
       await channelAPI.demoteFromAdmin(selectedChannel._id, memberId);
       alert('Admin demoted successfully!');
-      
+
       const channelData: any = await channelAPI.getDetails(selectedChannel._id);
       setSelectedChannel(channelData.channel);
-      
+
       await fetchChannelsForWorkspace(currentWorkspace!._id);
     } catch (error: any) {
       alert(error.message || 'Failed to demote admin');
@@ -829,7 +887,7 @@ const {
 
   const handleLeaveChannel = async () => {
     if (!activeChannel) return;
-    
+
     if (activeChannel.name === 'general') {
       showToast('Cannot leave general channel', 'error');
       return;
@@ -1001,7 +1059,7 @@ const {
                   return aid === uid;
                 });
                 const hasUnread = unreadChannels.has(channel._id);
-                
+
                 return (
                   <button
                     key={channel._id}
@@ -1012,11 +1070,10 @@ const {
                       setContextMenuPos({ x: e.clientX, y: e.clientY });
                       setShowChannelContextMenu(true);
                     }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${
-                      activeChannel?._id === channel._id
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
-                    }`}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${activeChannel?._id === channel._id
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
+                      }`}
                   >
                     <span className="text-lg">{channel.isPrivate ? '🔒' : '#'}</span>
                     <span className={`text-sm font-medium truncate flex-1 ${hasUnread ? 'font-bold text-white' : ''}`}>{channel.name}</span>
@@ -1061,14 +1118,14 @@ const {
               </div>
             )}
             <button
-            onClick={() => setShowSearchModal(true)}
-            className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-white"
-            title="Search"
+              onClick={() => setShowSearchModal(true)}
+              className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-white"
+              title="Search"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                </button>
+              </svg>
+            </button>
             {/* DM List */}
             <div className="space-y-1">
               {(showUserSearch && userSearchQuery ? filteredMembers : dmConversations.slice(0, 8)).map((item: any) => {
@@ -1077,7 +1134,7 @@ const {
                 const isCurrentUserCheck = (user._id === currentUser?._id) || (user.id === currentUser?.id);
                 if (isCurrentUserCheck) return null;
                 return (
-                <button
+                  <button
                     key={user._id || user.id}
                     onClick={() => handleSelectDMUser(user)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${(activeDMUser?._id === user._id || activeDMUser?.id === user.id)
@@ -1152,100 +1209,135 @@ const {
               isAdmin={isChannelAdmin}
               onShowBookmarks={() => setShowBookmarks(true)}
               onShowMediaFiles={() => setShowMediaFiles(true)}
+              onScheduleMeeting={handleOpenScheduler}
+              onStartMeeting={handleOpenMeetingsList}
+              onStartGroupCall={(callType) => startGroupCall(activeChannel._id, callType)}
+              isGroupCallActive={!!groupCall}
             />
           )}
 
           {/* DM Header */}
           {showDM && activeDMUser && (
-            <header className="h-16 bg-[#0a0a0a] border-b border-[#1f1f1f] px-6 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-white font-semibold">
-                {getInitials(activeDMUser.fullName)}
+            <header className="h-16 bg-[#0a0a0a] border-b border-[#1f1f1f] px-6 flex items-center gap-3 justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-white font-semibold">
+                  {getInitials(activeDMUser.fullName)}
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">{activeDMUser.fullName}</h2>
+                  <p className="text-xs text-gray-500">{activeDMUser.email}</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">{activeDMUser.fullName}</h2>
-                <p className="text-xs text-gray-500">{activeDMUser.email}</p>
+
+              {/* 📞 CALL BUTTONS */}
+              <div className="flex items-center gap-2">
+                {mediaError && (
+                  <span className="text-xs text-red-400 max-w-[160px] truncate" title={mediaError}>
+                    ⚠ {mediaError}
+                  </span>
+                )}
+                <button
+                  onClick={() => initiateCall(activeDMUser._id || activeDMUser.id, 'voice')}
+                  disabled={isCallActive}
+                  className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-green-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={`Voice call ${activeDMUser.fullName}`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => initiateCall(activeDMUser._id || activeDMUser.id, 'video')}
+                  disabled={isCallActive}
+                  className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={`Video call ${activeDMUser.fullName}`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
               </div>
             </header>
           )}
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {!activeChannel && !showDM ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-gray-400 mb-2">Welcome to SyncSpace!</h3>
-                <p className="text-gray-600">Select a channel or start a direct message</p>
+            {!activeChannel && !showDM ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold text-gray-400 mb-2">Welcome to SyncSpace!</h3>
+                  <p className="text-gray-600">Select a channel or start a direct message</p>
+                </div>
               </div>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <h3 className="text-xl font-semibold text-gray-400 mb-2">No messages yet</h3>
-                <p className="text-gray-600">
-                  {showDM && activeDMUser
-                    ? `Start a conversation with ${activeDMUser.fullName}`
-                    : `Be the first to message #${activeChannel?.name}`}
-                </p>
+            ) : messages.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-400 mb-2">No messages yet</h3>
+                  <p className="text-gray-600">
+                    {showDM && activeDMUser
+                      ? `Start a conversation with ${activeDMUser.fullName}`
+                      : `Be the first to message #${activeChannel?.name}`}
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : (
-            messages.map((message) => {
-              if (!currentUser) return null;
+            ) : (
+              messages.map((message) => {
+                if (!currentUser) return null;
 
-              if (showDM && activeDMUser) {
-                const senderId = typeof message.senderId === 'object' ? (message.senderId._id || message.senderId.id) : message.senderId;
-                const recipientId = typeof message.recipientId === 'object' ? (message.recipientId._id || message.recipientId.id) : message.recipientId;
-                const currentUserId = currentUser._id || currentUser.id;
-                const selectedUserId = activeDMUser._id || activeDMUser.id;
+                if (showDM && activeDMUser) {
+                  const senderId = typeof message.senderId === 'object' ? (message.senderId._id || message.senderId.id) : message.senderId;
+                  const recipientId = typeof message.recipientId === 'object' ? (message.recipientId._id || message.recipientId.id) : message.recipientId;
+                  const currentUserId = currentUser._id || currentUser.id;
+                  const selectedUserId = activeDMUser._id || activeDMUser.id;
 
-                const isFromCurrentUser = senderId === currentUserId;
-                const isToCurrentUser = recipientId === currentUserId;
-                const isDMWithSelectedUser = senderId === selectedUserId || recipientId === selectedUserId;
+                  const isFromCurrentUser = senderId === currentUserId;
+                  const isToCurrentUser = recipientId === currentUserId;
+                  const isDMWithSelectedUser = senderId === selectedUserId || recipientId === selectedUserId;
 
-                if (!(isFromCurrentUser || isToCurrentUser) || !isDMWithSelectedUser) return null;
-              } else if (activeChannel) {
-                if (message.messageType !== 'channel' || message.channelId !== activeChannel._id) return null;
-              }
-
-              return (
-                <MessageItem
-                  key={message._id}
-                  message={message}
-                  currentUser={currentUser}
-                  onEdit={handleEditMessage}
-                  onDelete={handleDeleteMessage}
-                  onReply={handleShowThread}
-                  onReaction={handleReaction}
-                  onShowThread={handleShowThread}
-                  onShowProfile={handleShowProfile}
-                  onReport={handleReportMessage}
-                  onBookmark={() => handleBookmarkMessage(message._id)}
-                  isBookmarked={bookmarkedMessages.has(message._id)}
-                />
-              );
-            })
-          )}
-
-          {/* Typing Indicator */}
-          {activeTypingUsers.length > 0 && (
-            <div className="flex items-center gap-2 text-sm text-gray-400 italic px-4 py-2 bg-[#0f0f0f] rounded">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-              </div>
-              <span>
-                {activeTypingUsers.length === 1 
-                  ? `${activeTypingUsers[0].userName} is typing...`
-                  : activeTypingUsers.length === 2
-                  ? `${activeTypingUsers[0].userName} and ${activeTypingUsers[1].userName} are typing...`
-                  : `${activeTypingUsers.length} people are typing...`
+                  if (!(isFromCurrentUser || isToCurrentUser) || !isDMWithSelectedUser) return null;
+                } else if (activeChannel) {
+                  if (message.messageType !== 'channel' || message.channelId !== activeChannel._id) return null;
                 }
-              </span>
-            </div>
-          )}
 
-          <div ref={messagesEndRef} />
+                return (
+                  <MessageItem
+                    key={message._id}
+                    message={message}
+                    currentUser={currentUser}
+                    onEdit={handleEditMessage}
+                    onDelete={handleDeleteMessage}
+                    onReply={handleShowThread}
+                    onReaction={handleReaction}
+                    onShowThread={handleShowThread}
+                    onShowProfile={handleShowProfile}
+                    onReport={handleReportMessage}
+                    onBookmark={() => handleBookmarkMessage(message._id)}
+                    isBookmarked={bookmarkedMessages.has(message._id)}
+                  />
+                );
+              })
+            )}
+
+            {/* Typing Indicator */}
+            {activeTypingUsers.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-gray-400 italic px-4 py-2 bg-[#0f0f0f] rounded">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                  <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                  <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                </div>
+                <span>
+                  {activeTypingUsers.length === 1
+                    ? `${activeTypingUsers[0].userName} is typing...`
+                    : activeTypingUsers.length === 2
+                      ? `${activeTypingUsers[0].userName} and ${activeTypingUsers[1].userName} are typing...`
+                      : `${activeTypingUsers.length} people are typing...`
+                  }
+                </span>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
         </div>
 
@@ -1635,7 +1727,7 @@ const {
                 </svg>
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-gray-300 uppercase">General</h3>
@@ -1713,16 +1805,81 @@ const {
         />
       )}
 
+      {/* Meeting Scheduler Modal */}
+      {isSchedulerOpen && (
+        <MeetingScheduler
+          isOpen={isSchedulerOpen}
+          onClose={() => setIsSchedulerOpen(false)}
+          workspaceId={currentWorkspace?._id}
+          channelId={activeChannel?._id}
+        />
+      )}
+
+      {/* Meetings List Modal */}
+      {isMeetingsListOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Your Meetings
+              </h2>
+              <button
+                onClick={() => setIsMeetingsListOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-5rem)]">
+              <ScheduledMeetingsList
+                workspaceId={currentWorkspace?._id}
+                channelId={activeChannel?._id}
+                onJoinMeeting={handleJoinMeeting}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Meeting Room */}
+      {activeMeeting && isInMeeting && (
+        <MeetingRoom
+          meeting={activeMeeting}
+          onLeaveMeeting={handleLeaveMeeting}
+        />
+      )}
+
+      {/* Meeting Notifications */}
+      <div className="fixed top-20 right-6 space-y-4 z-40 max-w-md">
+        {meetingNotificationsDisplay.map((notification, index) => (
+          <div key={index}>
+            <MeetingNotification
+              meeting={notification.meeting}
+              type={notification.type}
+              onJoin={() => {
+                handleJoinMeeting(notification.meeting);
+              }}
+              onDismiss={() => {
+                setMeetingNotificationsDisplay((prev) =>
+                  prev.filter((_, i) => i !== index)
+                );
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
       {/* Toast Notifications */}
       <div className="fixed bottom-6 right-6 space-y-2 z-[100]">
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 ${
-              toast.type === 'success' ? 'bg-green-500/90' :
+            className={`px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 ${toast.type === 'success' ? 'bg-green-500/90' :
               toast.type === 'error' ? 'bg-red-500/90' :
-              'bg-blue-500/90'
-            } text-white`}
+                'bg-blue-500/90'
+              } text-white`}
           >
             {toast.type === 'success' ? (
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
