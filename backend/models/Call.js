@@ -34,7 +34,7 @@ const callSchema = new mongoose.Schema({
   workspace: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Workspace',
-    required: true
+    required: false  // Optional — DM calls don't belong to a workspace
   }
 }, {
   timestamps: true
@@ -47,7 +47,7 @@ callSchema.index({ workspace: 1 });
 callSchema.index({ status: 1 });
 
 // Virtual to calculate duration if not set
-callSchema.virtual('calculatedDuration').get(function() {
+callSchema.virtual('calculatedDuration').get(function () {
   if (this.duration > 0) return this.duration;
   if (this.startTime && this.endTime) {
     return Math.floor((this.endTime - this.startTime) / 1000);
@@ -56,13 +56,13 @@ callSchema.virtual('calculatedDuration').get(function() {
 });
 
 // Method to check if call involves user
-callSchema.methods.involvesUser = function(userId) {
-  return this.caller.toString() === userId.toString() || 
-         this.receiver.toString() === userId.toString();
+callSchema.methods.involvesUser = function (userId) {
+  return this.caller.toString() === userId.toString() ||
+    this.receiver.toString() === userId.toString();
 };
 
 // Method to get the other participant
-callSchema.methods.getOtherParticipant = function(userId) {
+callSchema.methods.getOtherParticipant = function (userId) {
   return this.caller.toString() === userId.toString() ? this.receiver : this.caller;
 };
 

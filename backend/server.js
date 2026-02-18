@@ -199,6 +199,7 @@ const jwt = require('jsonwebtoken');
 // ⭐ NEW: Import socket handlers
 const callHandlers = require('./socket/callHandlers');
 const meetingHandlers = require('./socket/meetingHandlers');
+const groupCallHandlers = require('./socket/groupCallHandlers');
 
 // Store online users
 const onlineUsers = new Map(); // userId -> socketId
@@ -213,20 +214,21 @@ io.use(async (socket, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = decoded.id;
-    
-    // ⭐ NEW: Fetch user details and attach to socket for call/meeting handlers
-    const user = await User.findById(decoded.id).select('name email avatar');
+
+    // ✅ FIX: Select 'fullName' (User model field), not 'name'
+    const user = await User.findById(decoded.id).select('fullName email avatar');
     if (!user) {
       return next(new Error('Authentication error: User not found'));
     }
-    
+
     socket.user = {
       id: user._id.toString(),
-      name: user.name,
+      fullName: user.fullName,  // ✅ FIX: was 'name', User model has 'fullName'
+      name: user.fullName,      // keep 'name' alias for backward compat
       email: user.email,
       avatar: user.avatar
     };
-    
+
     next();
   } catch (error) {
     console.error('Socket authentication error:', error.message);
@@ -261,7 +263,7 @@ io.on('connection', (socket) => {
   // ⭐ NEW: Join user's personal room for direct notifications (calls/meetings)
   if (socket.user) {
     socket.join(socket.user.id);
-    console.log(`User ${socket.user.name} joined personal room: ${socket.user.id}`);
+    console.log(`🏠 User '${socket.user.fullName}' joined personal room: '${socket.user.id}' (socketId: ${socket.id})`);
   }
 
   // ⭐ NEW: Initialize call handlers
@@ -269,6 +271,9 @@ io.on('connection', (socket) => {
 
   // ⭐ NEW: Initialize meeting handlers
   meetingHandlers(io, socket);
+
+  // ⭐ NEW: Initialize group call handlers
+  groupCallHandlers(io, socket);
 
   // User joins a workspace room
   socket.on('workspace:join', (workspaceId) => {
