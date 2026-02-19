@@ -16,9 +16,13 @@ interface ChannelHeaderProps {
   onStartGroupCall?: (callType: 'voice' | 'video') => void;
   isAdmin?: boolean;
   isGroupCallActive?: boolean;
+  // ✅ NEW: Screen share props
+  onStartScreenShare?: (channelId: string) => void;
+  activeScreenShareRooms?: Array<{ roomId: string; hostName: string; viewerCount?: number }>;
+  onJoinScreenShare?: (roomId: string) => void;
+  channelId?: string;
 }
 
-// ── Tooltip ───────────────────────────────────────────────────────────────────
 const Tip = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="relative group/tip">
     {children}
@@ -28,35 +32,22 @@ const Tip = ({ label, children }: { label: string; children: React.ReactNode }) 
   </div>
 );
 
-// ── Icon button ───────────────────────────────────────────────────────────────
 const IconBtn = ({
-  onClick,
-  title,
-  disabled = false,
-  variant = 'default',
-  active = false,
-  children,
+  onClick, title, disabled = false, variant = 'default', active = false, children,
 }: {
-  onClick?: () => void;
-  title: string;
-  disabled?: boolean;
-  variant?: 'default' | 'green' | 'blue' | 'red';
-  active?: boolean;
-  children: React.ReactNode;
+  onClick?: () => void; title: string; disabled?: boolean;
+  variant?: 'default' | 'green' | 'blue' | 'red' | 'purple'; active?: boolean; children: React.ReactNode;
 }) => {
   const hoverColor =
-    variant === 'green' ? 'hover:text-green-400 hover:bg-green-500/10' :
-    variant === 'blue'  ? 'hover:text-blue-400 hover:bg-blue-500/10' :
-    variant === 'red'   ? 'hover:text-red-400 hover:bg-red-500/10' :
-                          'hover:text-white hover:bg-[#1e1e1e]';
-
+    variant === 'green'  ? 'hover:text-green-400 hover:bg-green-500/10' :
+    variant === 'blue'   ? 'hover:text-blue-400 hover:bg-blue-500/10' :
+    variant === 'red'    ? 'hover:text-red-400 hover:bg-red-500/10' :
+    variant === 'purple' ? 'hover:text-purple-400 hover:bg-purple-500/10' :
+                           'hover:text-white hover:bg-[#1e1e1e]';
   const activeClass = active ? 'text-white bg-[#1e1e1e]' : 'text-gray-500';
-
   return (
     <Tip label={title}>
-      <button
-        onClick={onClick}
-        disabled={disabled}
+      <button onClick={onClick} disabled={disabled}
         className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-150 ${activeClass} ${hoverColor} disabled:opacity-30 disabled:cursor-not-allowed`}
       >
         {children}
@@ -65,26 +56,14 @@ const IconBtn = ({
   );
 };
 
-// ── Divider ───────────────────────────────────────────────────────────────────
 const Divider = () => <div className="w-px h-5 bg-[#1f1f1f] mx-0.5" />;
 
-// ── Main ─────────────────────────────────────────────────────────────────────
 const ChannelHeader = ({
-  channelName,
-  description,
-  isPrivate,
-  memberCount,
-  onShowInfo,
-  onShowSettings,
-  onSearch,
-  onAddPeople,
-  onShowBookmarks,
-  onShowMediaFiles,
-  onScheduleMeeting,
-  onStartMeeting,
-  onStartGroupCall,
-  isAdmin = false,
-  isGroupCallActive = false,
+  channelName, description, isPrivate, memberCount,
+  onShowInfo, onShowSettings, onSearch, onAddPeople,
+  onShowBookmarks, onShowMediaFiles, onScheduleMeeting, onStartMeeting,
+  onStartGroupCall, isAdmin = false, isGroupCallActive = false,
+  onStartScreenShare, activeScreenShareRooms = [], onJoinScreenShare, channelId,
 }: ChannelHeaderProps) => {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -92,20 +71,19 @@ const ChannelHeader = ({
   useEffect(() => {
     if (!showMoreMenu) return;
     const handle = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setShowMoreMenu(false);
-      }
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMoreMenu(false);
     };
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, [showMoreMenu]);
 
+  const activeRoom = activeScreenShareRooms[0] || null;
+
   return (
     <header className="h-14 bg-[#0d0d0d] border-b border-[#1a1a1a] px-5 flex items-center justify-between flex-shrink-0">
 
-      {/* ── Left: Channel name + description ── */}
+      {/* Left */}
       <div className="flex items-center gap-3 min-w-0">
-        {/* Channel prefix */}
         <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center">
           {isPrivate ? (
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,12 +93,9 @@ const ChannelHeader = ({
             <span className="text-gray-400 font-bold text-base leading-none">#</span>
           )}
         </div>
-
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-white truncate leading-tight">
-              {channelName}
-            </h2>
+            <h2 className="text-sm font-bold text-white truncate leading-tight">{channelName}</h2>
             {memberCount !== undefined && (
               <span className="text-[11px] text-gray-600 flex-shrink-0 hidden sm:block">
                 {memberCount} {memberCount === 1 ? 'member' : 'members'}
@@ -128,17 +103,27 @@ const ChannelHeader = ({
             )}
           </div>
           {description && (
-            <p className="text-[11px] text-gray-600 truncate leading-tight max-w-xs">
-              {description}
-            </p>
+            <p className="text-[11px] text-gray-600 truncate leading-tight max-w-xs">{description}</p>
           )}
         </div>
       </div>
 
-      {/* ── Right: Actions ── */}
+      {/* Right */}
       <div className="flex items-center gap-0.5">
 
-        {/* Call buttons — primary actions, always visible */}
+        {/* ✅ Active screen share join badge — shown when someone is sharing */}
+        {activeRoom && onJoinScreenShare && (
+          <button
+            onClick={() => onJoinScreenShare(activeRoom.roomId)}
+            className="flex items-center gap-1.5 px-3 py-1.5 mr-1 bg-purple-500/15 border border-purple-500/35 rounded-lg text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-colors"
+            title={`Join ${activeRoom.hostName}'s screen share`}
+          >
+            <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse inline-block" />
+            Join Session
+          </button>
+        )}
+
+        {/* Call buttons */}
         {onStartGroupCall && (
           <>
             <IconBtn
@@ -172,6 +157,21 @@ const ChannelHeader = ({
               </svg>
             </IconBtn>
 
+            {/* ✅ NEW: Screen share button */}
+            {onStartScreenShare && (
+              <IconBtn
+                onClick={() => onStartScreenShare(channelId || channelName)}
+                title="Start screen share session"
+                variant="purple"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+              </IconBtn>
+            )}
+
             <Divider />
           </>
         )}
@@ -185,7 +185,7 @@ const ChannelHeader = ({
           </IconBtn>
         )}
 
-        {/* Members / Add people */}
+        {/* Members */}
         {onShowInfo && (
           <IconBtn onClick={onShowInfo} title="Members">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,16 +222,12 @@ const ChannelHeader = ({
           </IconBtn>
         )}
 
-        {/* More (schedule meeting, start meeting, settings) */}
+        {/* More menu */}
         {(onScheduleMeeting || onStartMeeting || (isAdmin && onShowSettings)) && (
           <>
             <Divider />
             <div className="relative" ref={moreRef}>
-              <IconBtn
-                onClick={() => setShowMoreMenu(p => !p)}
-                title="More options"
-                active={showMoreMenu}
-              >
+              <IconBtn onClick={() => setShowMoreMenu(p => !p)} title="More options" active={showMoreMenu}>
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <circle cx="5" cy="12" r="1.5" />
                   <circle cx="12" cy="12" r="1.5" />
@@ -241,40 +237,30 @@ const ChannelHeader = ({
 
               {showMoreMenu && (
                 <div className="absolute right-0 top-full mt-2 w-52 bg-[#111] border border-[#222] rounded-xl shadow-2xl shadow-black/60 overflow-hidden z-50 py-1">
-
                   {onScheduleMeeting && (
-                    <button
-                      onClick={() => { onScheduleMeeting(); setShowMoreMenu(false); }}
-                      className="w-full px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-white transition-colors flex items-center gap-3"
-                    >
+                    <button onClick={() => { onScheduleMeeting(); setShowMoreMenu(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-white transition-colors flex items-center gap-3">
                       <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       Schedule meeting
                     </button>
                   )}
-
                   {onStartMeeting && (
-                    <button
-                      onClick={() => { onStartMeeting(); setShowMoreMenu(false); }}
-                      className="w-full px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-white transition-colors flex items-center gap-3"
-                    >
+                    <button onClick={() => { onStartMeeting(); setShowMoreMenu(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-white transition-colors flex items-center gap-3">
                       <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                       Join a meeting
                     </button>
                   )}
-
                   {isAdmin && onShowSettings && (onScheduleMeeting || onStartMeeting) && (
                     <div className="my-1 border-t border-[#1f1f1f]" />
                   )}
-
                   {isAdmin && onShowSettings && (
-                    <button
-                      onClick={() => { onShowSettings(); setShowMoreMenu(false); }}
-                      className="w-full px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-white transition-colors flex items-center gap-3"
-                    >
+                    <button onClick={() => { onShowSettings(); setShowMoreMenu(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-300 hover:bg-[#1a1a1a] hover:text-white transition-colors flex items-center gap-3">
                       <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

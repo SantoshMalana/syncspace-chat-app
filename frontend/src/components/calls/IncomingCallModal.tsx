@@ -15,6 +15,13 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
   caller, callType, onAccept, onDecline,
 }) => {
   const [countdown, setCountdown] = useState(30);
+  const pct = (countdown / 30) * 100;
+  // Color drains green → yellow → red as time runs out
+  const barColor = countdown > 20
+    ? `#10b981`
+    : countdown > 10
+      ? `hsl(${((countdown - 10) / 10) * 60 + 36}deg 90% 55%)`
+      : `#ef4444`;
   const displayName = caller.name || 'Unknown';
   const initials = displayName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -32,7 +39,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
     <>
       <div className="icm-backdrop" />
 
-      <div className="icm-card">
+      <div className={`icm-card${countdown <= 5 ? ' icm-card-shake' : ''}`}>
 
         {/* Call type badge */}
         <div className="icm-badge">
@@ -64,11 +71,16 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         <h2 className="icm-name">{displayName}</h2>
         <p className="icm-sub">is calling you</p>
 
-        {/* Progress bar */}
+        {/* Progress bar — green → yellow → red drain */}
         <div className="icm-bar">
-          <div className="icm-bar-fill" style={{ width: `${(countdown / 30) * 100}%` }} />
+          <div
+            className="icm-bar-fill"
+            style={{ width: `${pct}%`, background: barColor, boxShadow: `0 0 8px ${barColor}88` }}
+          />
         </div>
-        <p className="icm-countdown">{countdown}s</p>
+        <p className="icm-countdown" style={{ color: countdown <= 10 ? barColor : undefined }}>
+          {countdown}s remaining
+        </p>
 
         {/* Action buttons */}
         <div className="icm-actions">
@@ -82,7 +94,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
             <span>Decline</span>
           </button>
 
-          <button className="icm-btn icm-btn-accept" onClick={onAccept}>
+          <button className={`icm-btn icm-btn-accept${countdown <= 10 ? ' icm-btn-accept-pulse' : ''}`} onClick={onAccept}>
             <span className="icm-btn-icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
@@ -124,6 +136,12 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         @keyframes icmUp {
           from { opacity:0; transform:translate(-50%,-44%) scale(.9); }
           to   { opacity:1; transform:translate(-50%,-50%) scale(1); }
+        }
+        .icm-card-shake { animation: icmShake .4s ease infinite; }
+        @keyframes icmShake {
+          0%,100% { transform:translate(-50%,-50%) rotate(0deg); }
+          25%     { transform:translate(-51%,-50%) rotate(-.4deg); }
+          75%     { transform:translate(-49%,-50%) rotate(.4deg); }
         }
 
         /* Badge */
@@ -179,13 +197,13 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         }
         .icm-bar-fill {
           height: 100%;
-          background: linear-gradient(90deg, #7c3aed, #3b82f6);
           border-radius: 2px;
-          transition: width 1s linear;
+          transition: width 1s linear, background .6s ease, box-shadow .6s ease;
         }
         .icm-countdown {
           font-size: 11px; color: rgba(255,255,255,.25);
           margin: -8px 0 0; font-variant-numeric: tabular-nums;
+          transition: color .4s ease;
         }
 
         /* Buttons */
@@ -218,6 +236,13 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         .icm-btn-accept:hover {
           transform: translateY(-2px);
           box-shadow: 0 8px 26px rgba(16,185,129,.48);
+        }
+        .icm-btn-accept-pulse {
+          animation: icmAcceptPulse 1s ease-in-out infinite;
+        }
+        @keyframes icmAcceptPulse {
+          0%,100% { box-shadow: 0 4px 18px rgba(16,185,129,.32); transform: scale(1); }
+          50%     { box-shadow: 0 6px 28px rgba(16,185,129,.65); transform: scale(1.03); }
         }
 
         @media (max-width: 480px) {

@@ -129,8 +129,12 @@ const MessageItem = ({
     ? (message.senderId._id === currentUser.id || message.senderId._id === currentUser._id)
     : message.senderId === currentUser.id || message.senderId === currentUser._id;
 
-  // Check if message has been read by someone other than sender
-  const isRead = message.readBy && message.readBy.length > 0;
+  // Check if message has been read by someone OTHER than the sender (fixes double-tick bug)
+  const currentUserId = currentUser._id || currentUser.id || '';
+  const isRead = !!message.readBy && message.readBy.some(r => {
+    const readerId = typeof r.userId === 'string' ? r.userId : (r.userId as any)?._id || (r.userId as any)?.id || '';
+    return readerId && readerId !== currentUserId;
+  });
 
   useEffect(() => {
     if (isEditing && editInputRef.current) {
@@ -332,11 +336,10 @@ const MessageItem = ({
                   key={emoji}
                   onClick={() => onReaction(message._id, emoji)}
                   title={`${count} ${count === 1 ? 'reaction' : 'reactions'}`}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
-                    reacted
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${reacted
                       ? 'bg-primary/15 border-primary/40 text-primary'
                       : 'bg-[#1e1e1e] border-[#2a2a2a] text-gray-300 hover:border-[#3a3a3a] hover:bg-[#252525]'
-                  }`}
+                    }`}
                 >
                   <span className="text-sm leading-none">{emoji}</span>
                   <span className="font-medium leading-none">{count}</span>

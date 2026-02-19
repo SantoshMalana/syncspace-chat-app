@@ -38,7 +38,7 @@ export interface CallState {
   isRinging: boolean;
   isMuted: boolean;
   isVideoEnabled: boolean;
-  isScreenSharing: boolean;        // ✅ NEW
+  isScreenSharing: boolean;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isConnected: boolean;
@@ -53,8 +53,8 @@ export interface CallContextType extends CallState {
   cancelCall: () => void;
   toggleMute: () => void;
   toggleVideo: () => void;
-  startScreenShare: () => Promise<void>;   // ✅ NEW
-  stopScreenShare: () => Promise<void>;    // ✅ NEW
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => Promise<void>;
   connectionState: string;
   mediaError: string | null;
 }
@@ -101,10 +101,10 @@ export interface VoiceCallModalProps {
   isMuted: boolean;
   duration: number;
   isConnected: boolean;
-  isScreenSharing: boolean;          // ✅ NEW
+  isScreenSharing: boolean;
   onToggleMute: () => void;
-  onStartScreenShare: () => Promise<void>;  // ✅ NEW
-  onStopScreenShare: () => Promise<void>;   // ✅ NEW
+  onStartScreenShare: () => Promise<void>;
+  onStopScreenShare: () => Promise<void>;
   onEndCall: () => void;
 }
 
@@ -116,13 +116,15 @@ export interface VideoCallModalProps {
   duration: number;
   isConnected?: boolean;
   isVideoEnabled?: boolean;
-  isScreenSharing: boolean;          // ✅ NEW
+  isScreenSharing: boolean;
   onToggleMute: () => void;
   onToggleVideo?: () => void;
-  onStartScreenShare: () => Promise<void>;  // ✅ NEW
-  onStopScreenShare: () => Promise<void>;   // ✅ NEW
+  onStartScreenShare: () => Promise<void>;
+  onStopScreenShare: () => Promise<void>;
   onEndCall: () => void;
 }
+
+// ── Group Call Types ──────────────────────────────────────────
 
 export interface GroupCallParticipant {
   userId: string;
@@ -156,10 +158,13 @@ export interface GroupCallContextType {
   localStream: MediaStream | null;
   isMuted: boolean;
   isVideoEnabled: boolean;
+  isScreenSharing: boolean;          // ✅ NEW
   startGroupCall: (channelId: string, callType: CallType) => Promise<void>;
   joinGroupCall: (channelId: string, callId: string, callType: CallType) => Promise<void>;
   leaveGroupCall: () => void;
   declineGroupCall: () => void;
   toggleMute: () => void;
   toggleVideo: () => void;
+  startScreenShare: () => Promise<void>;   // ✅ NEW
+  stopScreenShare: () => Promise<void>;    // ✅ NEW
 }

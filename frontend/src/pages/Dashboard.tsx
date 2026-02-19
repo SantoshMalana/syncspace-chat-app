@@ -30,10 +30,13 @@ import ScheduledMeetingsList from '../components/meetings/ScheduledMeetingsList'
 import MeetingRoom from '../components/meetings/MeetingRoom';
 import MeetingNotification from '../components/meetings/MeetingNotification';
 import type { Meeting } from '../types/meeting.types';
+import { useScreenShareContext } from '../context/ScreenShareContext';
+import ScreenShareRoom from '../components/screenshare/ScreenShareRoom';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
   const socketListenersRegistered = useRef(false);
   const currentUserRef = useRef<User | null>(null);
@@ -95,6 +98,17 @@ const Dashboard = () => {
     startGroupCall,
   } = useGroupCallContext();
 
+  // ============ SCREEN SHARE ============
+  const {
+    isHosting,
+    isViewing,
+    availableRooms,
+    startRoom,
+    joinRoom,
+  } = useScreenShareContext();
+
+  const [showScreenShareRoom, setShowScreenShareRoom] = useState(false);
+
   // ============ MEETING FUNCTIONALITY ============
   const {
     isInMeeting,
@@ -137,6 +151,8 @@ const Dashboard = () => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showKeybindsModal, setShowKeybindsModal] = useState(false);
+  const [showScrollFAB, setShowScrollFAB] = useState(false);
+  const [unreadBelowFold, setUnreadBelowFold] = useState(0);
 
   // Initialize on mount
   useEffect(() => {
@@ -151,10 +167,10 @@ const Dashboard = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Cmd+K or Ctrl+K for keyboard shortcuts
+      // Cmd+K / Ctrl+K → open search
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setShowKeybindsModal(true);
+        setShowSearchModal(true);
       }
       // Cmd+/ or Ctrl+/ for help (alternative)
       if ((e.metaKey || e.ctrlKey) && e.key === '/') {
@@ -165,6 +181,19 @@ const Dashboard = () => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
+
+  // ── Scroll-to-bottom FAB: show when user scrolls up > 300px from bottom ──
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollFAB(distFromBottom > 300);
+      if (distFromBottom < 50) setUnreadBelowFold(0);
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [activeChannel, showDM]); // re-bind when view changes
 
   // ============ MEETING HANDLERS & LISTENERS ============
   const handleJoinMeeting = (meeting: Meeting) => {
@@ -376,50 +405,50 @@ const Dashboard = () => {
     }
   };
 
-  const  setupSocketListeners = (socket: any) => {
+  const setupSocketListeners = (socket: any) => {
     if (socketListenersRegistered.current) return;
     socketListenersRegistered.current = true;
 
     socket.on('message:new', (message: Message) => {
-  // Deduplicate — only add if not already in list
-  setMessages(prev => {
-    if (prev.some(m => m._id === message._id)) return prev;
-    return [...prev, message];
-  });
+      // Deduplicate — only add if not already in list
+      setMessages(prev => {
+        if (prev.some(m => m._id === message._id)) return prev;
+        return [...prev, message];
+      });
 
-  // ✅ FIX: Read from refs, not stale closure values
-  const senderIdStr = typeof message.senderId === 'object'
-    ? message.senderId._id
-    : message.senderId;
+      // ✅ FIX: Read from refs, not stale closure values
+      const senderIdStr = typeof message.senderId === 'object'
+        ? message.senderId._id
+        : message.senderId;
 
-  const currentUserIdStr =
-    currentUserRef.current?.id || currentUserRef.current?._id;
+      const currentUserIdStr =
+        currentUserRef.current?.id || currentUserRef.current?._id;
 
-  const currentActiveChannel = activeChannelRef.current;
-  const currentActiveDMUser = activeDMUserRef.current;
+      const currentActiveChannel = activeChannelRef.current;
+      const currentActiveDMUser = activeDMUserRef.current;
 
-  if (senderIdStr !== currentUserIdStr) {
+      if (senderIdStr !== currentUserIdStr) {
 
-    // Channel unread
-    if (message.channelId && message.channelId !== currentActiveChannel?._id) {
-      setUnreadChannels(prev => new Set([...prev, message.channelId!]));
-    }
+        // Channel unread
+        if (message.channelId && message.channelId !== currentActiveChannel?._id) {
+          setUnreadChannels(prev => new Set([...prev, message.channelId!]));
+        }
 
-    // DM unread
-    if (message.messageType === 'direct' && senderIdStr) {
-      const activeDMUserIdStr =
-        currentActiveDMUser?._id || currentActiveDMUser?.id;
+        // DM unread
+        if (message.messageType === 'direct' && senderIdStr) {
+          const activeDMUserIdStr =
+            currentActiveDMUser?._id || currentActiveDMUser?.id;
 
-      if (senderIdStr !== activeDMUserIdStr) {
-        setUnreadDMs(prev => {
-          const newMap = new Map(prev);
-          newMap.set(senderIdStr, (newMap.get(senderIdStr) || 0) + 1);
-          return newMap;
-        });
+          if (senderIdStr !== activeDMUserIdStr) {
+            setUnreadDMs(prev => {
+              const newMap = new Map(prev);
+              newMap.set(senderIdStr, (newMap.get(senderIdStr) || 0) + 1);
+              return newMap;
+            });
+          }
+        }
       }
-    }
-  }
-});
+    });
 
 
     socket.on('message:updated', (message: Message) => {
@@ -688,15 +717,15 @@ const Dashboard = () => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
-  
+
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
-  
+
   useEffect(() => {
     activeChannelRef.current = activeChannel;
   }, [activeChannel]);
-  
+
   useEffect(() => {
     activeDMUserRef.current = activeDMUser;
   }, [activeDMUser]);
@@ -998,7 +1027,7 @@ const Dashboard = () => {
   return (
     <div className="h-screen flex bg-[#0f0f0f] text-white">
 
-            {/* ═══════════════════════════════════════════════
+      {/* ═══════════════════════════════════════════════
           SIDEBAR - Replace the entire <aside> block
           from line: <aside className="w-64 bg-[#141414]...
           to the closing: </aside>
@@ -1021,7 +1050,9 @@ const Dashboard = () => {
                 <h1 className="text-sm font-bold text-white truncate leading-tight">
                   {currentWorkspace?.name || 'SyncSpace'}
                 </h1>
-                <p className="text-[10px] text-green-400 font-medium leading-tight">● Active</p>
+                <p className="text-[10px] text-green-400 font-medium leading-tight">
+                  ● {workspaceMembers.filter(m => m.status === 'online').length || 0} online
+                </p>
               </div>
             </div>
             <svg
@@ -1080,6 +1111,42 @@ const Dashboard = () => {
         {/* ── Scrollable Nav ── */}
         <div className="flex-1 overflow-y-auto py-3 space-y-5">
 
+          {/* ── Search Shortcut Pill ── */}
+          <div className="px-3">
+            <button
+              onClick={() => setShowSearchModal(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 bg-[#1a1a1a] hover:bg-[#222] border border-[#2a2a2a] hover:border-[#3a3a3a] rounded-lg text-gray-500 hover:text-gray-300 text-xs transition-all group"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="flex-1 text-left">Search...</span>
+              <span className="text-[10px] bg-[#2a2a2a] group-hover:bg-[#333] px-1.5 py-0.5 rounded font-mono text-gray-600 group-hover:text-gray-400 transition-colors">⌃K</span>
+            </button>
+          </div>
+
+          {/* ── Active Group Call Banner ── */}
+          {groupCall && activeChannel && groupCall.channelId === activeChannel._id && (
+            <div className="mx-3">
+              <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 p-3">
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-semibold text-emerald-400">Active call in #{activeChannel.name}</span>
+                </div>
+                <button
+                  onClick={() => startGroupCall(activeChannel._id, groupCall.callType || 'voice')}
+                  className="w-full py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-semibold transition-all hover:text-emerald-300"
+                >
+                  Join Call
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Channels Section ── */}
           <div className="px-3">
             <div className="flex items-center justify-between mb-1 px-1">
@@ -1114,11 +1181,10 @@ const Dashboard = () => {
                       setContextMenuPos({ x: e.clientX, y: e.clientY });
                       setShowChannelContextMenu(true);
                     }}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all group ${
-                      isActive
-                        ? 'bg-primary/15 text-white'
-                        : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-gray-200'
-                    }`}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all group ${isActive
+                      ? 'bg-primary/15 text-white'
+                      : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-gray-200'
+                      }`}
                   >
                     <span className={`text-sm font-medium flex-shrink-0 ${isActive ? 'text-primary' : 'text-gray-500'}`}>
                       {channel.isPrivate ? '🔒' : '#'}
@@ -1226,30 +1292,27 @@ const Dashboard = () => {
                 // Match status from workspaceMembers (which has live status updates)
                 const liveMember = workspaceMembers.find(m => m._id === uid || m.id === uid);
                 const isOnline = (liveMember?.status || user.status) === 'online';
-                const displayName = user.fullName || user.name || 'Unknown';
+                const displayName = user.fullName || 'Unknown';
                 const initials = getInitials(displayName);
 
                 return (
                   <button
                     key={uid}
                     onClick={() => handleSelectDMUser(user)}
-                    className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left transition-all group ${
-                      isActive
-                        ? 'bg-primary/15 text-white'
-                        : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-gray-200'
-                    }`}
+                    className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left transition-all group ${isActive
+                      ? 'bg-primary/15 text-white'
+                      : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-gray-200'
+                      }`}
                   >
                     {/* Avatar with online dot */}
                     <div className="relative flex-shrink-0">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white font-semibold text-xs ${
-                        isActive ? 'bg-gradient-to-br from-primary to-secondary' : 'bg-gradient-to-br from-primary/30 to-secondary/30'
-                      }`}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white font-semibold text-xs ${isActive ? 'bg-gradient-to-br from-primary to-secondary' : 'bg-gradient-to-br from-primary/30 to-secondary/30'
+                        }`}>
                         {initials}
                       </div>
                       {/* Online indicator */}
-                      <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#141414] ${
-                        isOnline ? 'bg-green-500' : 'bg-gray-600'
-                      }`} />
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#141414] ${isOnline ? 'bg-green-500' : 'bg-gray-600'
+                        }`} />
                     </div>
 
                     <span className={`text-sm truncate flex-1 ${unreadCount > 0 ? 'font-semibold text-white' : ''}`}>
@@ -1306,10 +1369,10 @@ const Dashboard = () => {
 
 
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col overflow-x-hidden">
+      <main className="flex-1 flex flex-col overflow-x-hidden relative">
 
         {/* Messages Area */}
-       <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col">
           {/* Channel Header - ONLY ONE */}
           {activeChannel && !showDM && (
             <ChannelHeader
@@ -1327,6 +1390,16 @@ const Dashboard = () => {
               onScheduleMeeting={handleOpenScheduler}
               onStartMeeting={handleOpenMeetingsList}
               onStartGroupCall={(callType) => startGroupCall(activeChannel._id, callType)}
+              onStartScreenShare={(channelId) => {
+                startRoom(channelId);
+                setShowScreenShareRoom(true);
+              }}
+              activeScreenShareRooms={availableRooms}
+              onJoinScreenShare={(roomId) => {
+                joinRoom(roomId);
+                setShowScreenShareRoom(true);
+              }}
+              channelId={activeChannel._id}
               isGroupCallActive={!!groupCall}
             />
           )}
@@ -1354,29 +1427,34 @@ const Dashboard = () => {
                 <button
                   onClick={() => initiateCall(activeDMUser._id || activeDMUser.id, 'voice')}
                   disabled={isCallActive}
-                  className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-green-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 border border-green-500/20 hover:border-green-500/30"
                   title={`Voice call ${activeDMUser.fullName}`}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
+                  Voice
                 </button>
                 <button
                   onClick={() => initiateCall(activeDMUser._id || activeDMUser.id, 'video')}
                   disabled={isCallActive}
-                  className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/30"
                   title={`Video call ${activeDMUser.fullName}`}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
+                  Video
                 </button>
               </div>
             </header>
           )}
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-6 space-y-4"
+          >
             {!activeChannel && !showDM ? (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
@@ -1454,6 +1532,28 @@ const Dashboard = () => {
 
             <div ref={messagesEndRef} />
           </div>
+
+          {/* ── Scroll To Bottom FAB ── */}
+          {showScrollFAB && (activeChannel || showDM) && (
+            <button
+              onClick={() => {
+                messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: 'smooth' });
+                setUnreadBelowFold(0);
+              }}
+              className="absolute bottom-24 right-6 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#1a1a2e] border border-primary/30 text-white text-xs font-semibold shadow-2xl hover:bg-[#24243e] transition-all hover:scale-105 backdrop-filter backdrop-blur-sm"
+              style={{ boxShadow: '0 4px 24px rgba(124,58,237,.35)' }}
+            >
+              {unreadBelowFold > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadBelowFold > 9 ? '9+' : unreadBelowFold}
+                </span>
+              )}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+              New messages
+            </button>
+          )}
         </div>
 
         {/* Message Input */}
@@ -2013,6 +2113,13 @@ const Dashboard = () => {
           </div>
         ))}
       </div>
+      {/* Screen Share Room */}
+      {(isHosting || isViewing) && showScreenShareRoom && (
+        <ScreenShareRoom
+          currentUserName={currentUser?.fullName || 'You'}
+          onClose={() => setShowScreenShareRoom(false)}
+        />
+      )}
     </div>
   );
 };

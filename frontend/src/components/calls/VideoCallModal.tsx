@@ -21,12 +21,27 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     return `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
   };
 
+  // ── FIX: Always keep video elements mounted; only reroute srcObject ──
   useEffect(() => {
-    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
+    const el = localVideoRef.current;
+    if (!el) return;
+    if (localStream) {
+      if (el.srcObject !== localStream) el.srcObject = localStream;
+      el.play().catch(() => { });
+    } else {
+      el.srcObject = null;
+    }
   }, [localStream]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+    const el = remoteVideoRef.current;
+    if (!el) return;
+    if (remoteStream) {
+      if (el.srcObject !== remoteStream) el.srcObject = remoteStream;
+      el.play().catch(() => { });
+    } else {
+      el.srcObject = null;
+    }
   }, [remoteStream]);
 
   const nudgeControls = () => {
@@ -42,6 +57,9 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
   const remoteHasVideo = !!(remoteStream && remoteStream.getVideoTracks().some(t => t.enabled && t.readyState === 'live'));
   const remoteIsSharing = remoteHasVideo && remoteStream?.getVideoTracks()[0]?.label?.toLowerCase().includes('screen');
+
+  // Local has video when stream exists and video is enabled OR screen sharing (stream always present once call started)
+  const localHasVideo = !!(localStream && (isVideoEnabled || isScreenSharing));
 
   return (
     <div
@@ -77,22 +95,24 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
         )}
       </div>
 
-      {/* ── PiP (local) ── */}
+      {/* ── PiP (local) — always-mounted video, shown/hidden via opacity ── */}
       <div className="vcv-pip">
-        {localStream && (isVideoEnabled || isScreenSharing) ? (
-          <video
-            ref={localVideoRef}
-            autoPlay playsInline muted
-            className={`vcv-pip-vid${isScreenSharing ? '' : ' vcv-pip-mirror'}`}
-          />
-        ) : (
+        {/* Always render the video element so srcObject binding persists */}
+        <video
+          ref={localVideoRef}
+          autoPlay playsInline muted
+          className={`vcv-pip-vid${isScreenSharing ? '' : ' vcv-pip-mirror'}`}
+          style={{ opacity: localHasVideo ? 1 : 0 }}
+        />
+        {/* Camera-off overlay — shown on top when camera is disabled */}
+        {!localHasVideo && (
           <div className="vcv-pip-off">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
               <path d="M7.5 4H14a2 2 0 0 1 2 2v3.5" />
               <line x1="1" y1="1" x2="23" y2="23" />
             </svg>
-            <span>Off</span>
+            <span>Cam Off</span>
           </div>
         )}
         {isScreenSharing && <div className="vcv-pip-badge">● Sharing</div>}
@@ -169,7 +189,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               </svg>
             )}
           </span>
-          <span className="vcv-btn-label">{isVideoEnabled ? 'Camera' : 'Camera'}</span>
+          <span className="vcv-btn-label">{isVideoEnabled ? 'Stop Cam' : 'Start Cam'}</span>
         </button>
 
         {/* Screen share */}
@@ -247,7 +267,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
         .vcv-dot:nth-child(3) { animation-delay: .4s; }
         @keyframes vcvPulse { 0%,80%,100%{transform:scale(0);opacity:.5} 40%{transform:scale(1);opacity:1} }
 
-        /* PiP */
+        /* PiP — always-mounted video container */
         .vcv-pip {
           position: absolute; bottom: 96px; right: 20px;
           width: 188px; height: 140px;
@@ -259,13 +279,14 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
           transition: transform .2s ease, box-shadow .2s ease;
         }
         .vcv-pip:hover { transform: scale(1.04); box-shadow: 0 12px 40px rgba(0,0,0,.8); }
-        .vcv-pip-vid { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .vcv-pip-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .3s ease; }
         .vcv-pip-mirror { transform: scaleX(-1); }
         .vcv-pip-off {
-          width: 100%; height: 100%;
+          position: absolute; inset: 0;
           display: flex; flex-direction: column;
           align-items: center; justify-content: center;
-          gap: 6px; color: rgba(255,255,255,.3); font-size: 11px;
+          gap: 6px; color: rgba(255,255,255,.35); font-size: 11px;
+          background: #12121e; transition: opacity .3s ease;
         }
         .vcv-pip-badge {
           position: absolute; bottom: 0; left: 0; right: 0;
@@ -319,7 +340,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
         .vcv-show { opacity: 1; pointer-events: all; }
         .vcv-hide { opacity: 0; pointer-events: none; }
 
-        /* Buttons */
+        /* Buttons — unified with GroupCallModal sizing */
         .vcv-btn {
           display: flex; flex-direction: column;
           align-items: center; gap: 6px;
