@@ -17,12 +17,12 @@ interface GroupCallModalProps {
     onLeave: () => void;
 }
 
-const MicOn = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>);
-const MicOff = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>);
-const CamOn = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>);
-const CamOff = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="M7.5 4H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>);
-const UsersIcon = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>);
-const ScreenShareIcon = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>);
+const MicOn = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>);
+const MicOff = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23" /><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" /><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>);
+const CamOn = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>);
+const CamOff = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" /><path d="M7.5 4H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10" /><line x1="1" y1="1" x2="23" y2="23" /></svg>);
+const UsersIcon = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>);
+const ScreenShareIcon = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>);
 
 // ── Participant tile ──────────────────────────────────────────────────────────
 const Tile: React.FC<{
@@ -83,8 +83,8 @@ const Tile: React.FC<{
             <div className="gcm-tile-badge">
                 {isMuted && (
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="1" y1="1" x2="23" y2="23"/>
-                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
                     </svg>
                 )}
                 <span>{participant.name}{isLocal ? ' (You)' : ''}</span>
@@ -195,7 +195,7 @@ export const GroupCallModal: React.FC<GroupCallModalProps> = ({
                 <button onClick={onLeave} className="gcm-btn gcm-btn-end" title="Leave call">
                     <span className="gcm-btn-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+                            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
                         </svg>
                     </span>
                     <span className="gcm-btn-label">Leave</span>
@@ -213,9 +213,9 @@ export const GroupCallModal: React.FC<GroupCallModalProps> = ({
         .gcm-header-channel { color:rgba(255,255,255,.5);font-weight:400; }
         .gcm-header-sub { color:rgba(255,255,255,.4);font-size:11px;margin:2px 0 0;display:flex;align-items:center;gap:6px; }
         .gcm-sharing-badge { background:rgba(16,185,129,.25);border:1px solid rgba(16,185,129,.4);border-radius:10px;padding:1px 8px;color:#10b981;font-size:11px;font-weight:600; }
-        .gcm-grid { flex:1;display:grid;gap:10px;padding:60px 14px 80px;align-content:center;overflow:hidden; }
-        .gcm-tile { position:relative;background:#12121e;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:150px;border:1.5px solid rgba(255,255,255,.07); }
-        .gcm-tile-video { position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .3s ease; }
+        .gcm-grid { flex:1;display:grid;gap:10px;padding:60px 14px 80px;overflow:hidden;align-items:stretch; }
+        .gcm-tile { position:relative;background:#12121e;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:0;height:100%;border:1.5px solid rgba(255,255,255,.07); }
+        .gcm-tile-video { position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transition:opacity .3s ease; }
         .gcm-tile-mirror { transform:scaleX(-1); }
         .gcm-tile-avatar-wrap { display:flex;flex-direction:column;align-items:center;gap:10px;z-index:1; }
         .gcm-tile-avatar { width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7c3aed 0%,#2563eb 100%);display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.5); }
@@ -239,7 +239,7 @@ export const GroupCallModal: React.FC<GroupCallModalProps> = ({
         .gcm-btn-sharing:hover { background:rgba(16,185,129,.35);transform:translateY(-2px); }
         .gcm-btn-end { background:linear-gradient(135deg,#ef4444,#dc2626);border-color:transparent;color:white;box-shadow:0 4px 16px rgba(239,68,68,.35);padding:13px 28px; }
         .gcm-btn-end:hover { transform:translateY(-2px);box-shadow:0 8px 24px rgba(239,68,68,.5); }
-        @media(max-width:480px){.gcm-grid{padding:56px 8px 72px;gap:7px}.gcm-tile{min-height:110px}.gcm-btn{padding:11px 14px;min-width:64px}.gcm-btn-end{padding:11px 22px}.gcm-controls{gap:8px;padding-bottom:22px}}
+        @media(max-width:480px){.gcm-grid{padding:56px 8px 72px;gap:7px}.gcm-tile{min-height:0;height:100%}.gcm-btn{padding:11px 14px;min-width:64px}.gcm-btn-end{padding:11px 22px}.gcm-controls{gap:8px;padding-bottom:22px}}
       `}</style>
         </div>
     );
