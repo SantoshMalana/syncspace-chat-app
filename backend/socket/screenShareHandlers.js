@@ -14,10 +14,12 @@ module.exports = (io, socket) => {
     const room = {
       roomId,
       hostId: socket.user.id,
+      hostSocketId: socket.id,
       hostName: socket.user.fullName || socket.user.name,
       channelId,
       workspaceId,
       peers: new Set([socket.id]),
+      viewerSockets: new Map(), // userId -> socketId
     };
     rooms.set(roomId, room);
     socket.join(`screenshare:${roomId}`);
@@ -42,11 +44,12 @@ module.exports = (io, socket) => {
     const room = rooms.get(roomId);
     if (!room) return socket.emit('screenshare:error', { message: 'Room not found' });
 
+    room.viewerSockets.set(socket.user.id, socket.id);
     room.peers.add(socket.id);
     socket.join(`screenshare:${roomId}`);
 
     // Tell the host to send an offer to this new viewer
-    io.to(room.hostId).emit('screenshare:viewer-joined', {
+    io.to(room.hostSocketId).emit('screenshare:viewer-joined', {
       viewerId: socket.user.id,
       viewerName: socket.user.fullName || socket.user.name,
       roomId,
@@ -73,21 +76,32 @@ module.exports = (io, socket) => {
 
   // WebRTC offer from host → viewer
   socket.on('screenshare:offer', ({ targetUserId, offer, roomId }) => {
-    io.to(targetUserId).emit('screenshare:offer', {
+    const room = rooms.get(roomId);
+    const targetSocketId = room?.viewerSockets?.get(targetUserId);
+    if (!targetSocketId) return;
+    io.to(targetSocketId).emit('screenshare:offer', {
       offer, roomId, hostId: socket.user.id,
     });
   });
 
   // WebRTC answer from viewer → host
   socket.on('screenshare:answer', ({ targetUserId, answer, roomId }) => {
-    io.to(targetUserId).emit('screenshare:answer', {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    io.to(room.hostSocketId).emit('screenshare:answer', {
       answer, roomId, viewerId: socket.user.id,
     });
   });
 
   // ICE candidates
   socket.on('screenshare:ice', ({ targetUserId, candidate, roomId }) => {
-    io.to(targetUserId).emit('screenshare:ice', {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const targetSocketId = targetUserId === room.hostId
+      ? room.hostSocketId
+      : room.viewerSockets?.get(targetUserId);
+    if (!targetSocketId) return;
+    io.to(targetSocketId).emit('screenshare:ice', {
       candidate, roomId, senderId: socket.user.id,
     });
   });
@@ -111,10 +125,11 @@ module.exports = (io, socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
+    room.viewerSockets.delete(socket.user.id);
     room.peers.delete(socket.id);
     socket.leave(`screenshare:${roomId}`);
 
-    io.to(room.hostId).emit('screenshare:viewer-left', {
+    io.to(room.hostSocketId).emit('screenshare:viewer-left', {
       viewerId: socket.user.id, roomId,
     });
 
@@ -134,6 +149,7 @@ module.exports = (io, socket) => {
         io.to(`workspace:${room.workspaceId}`).emit('screenshare:unavailable', { roomId });
         rooms.delete(roomId);
       } else if (room.peers.has(socket.id)) {
+        room.viewerSockets.delete(socket.user.id);
         room.peers.delete(socket.id);
         io.to(`screenshare:${roomId}`).emit('screenshare:viewer-count', {
           count: room.peers.size - 1,
