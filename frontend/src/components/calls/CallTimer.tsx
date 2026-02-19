@@ -8,48 +8,30 @@ export const CallTimer: React.FC<CallTimerProps> = ({ startTime }) => {
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      const diff = Math.floor((now.getTime() - startTime.getTime()) / 1000);
-      setDuration(diff);
+    const id = setInterval(() => {
+      setDuration(Math.floor((Date.now() - startTime.getTime()) / 1000));
     }, 1000);
-
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, [startTime]);
 
-  const formatDuration = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const fmt = (s: number): string => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+    return `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
   };
 
   return (
-    <div className="call-timer">
-      <span className="timer-text">{formatDuration(duration)}</span>
-      <style>{`
-        .call-timer {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 8px 16px;
-          background: rgba(0, 0, 0, 0.5);
-          border-radius: 20px;
-          backdrop-filter: blur(10px);
-        }
-
-        .timer-text {
-          font-size: 16px;
-          font-weight: 600;
-          color: #fff;
-          font-variant-numeric: tabular-nums;
-          letter-spacing: 0.5px;
-        }
-      `}</style>
-    </div>
+    <span style={{
+      fontVariantNumeric: 'tabular-nums',
+      fontSize: 13,
+      fontWeight: 500,
+      letterSpacing: '0.8px',
+      color: 'rgba(255,255,255,0.75)',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    }}>
+      {fmt(duration)}
+    </span>
   );
 };

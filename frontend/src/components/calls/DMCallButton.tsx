@@ -1,8 +1,4 @@
-// frontend/src/components/calls/DMCallButton.tsx
-// Call button specifically for Direct Messages in Dashboard
-
 import React from 'react';
-import { FaPhone, FaVideo } from 'react-icons/fa';
 import { useCallContext } from '../../context/CallContext';
 
 interface DMCallButtonProps {
@@ -11,51 +7,51 @@ interface DMCallButtonProps {
   compact?: boolean;
 }
 
+const PhoneIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+);
+
+const VideoIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="23 7 16 12 23 17 23 7"/>
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+  </svg>
+);
+
 export const DMCallButton: React.FC<DMCallButtonProps> = ({
-  userId,
-  userName,
-  compact = false,
+  userId, userName, compact = false,
 }) => {
   const { initiateCall, activeCall } = useCallContext();
-
-  const handleVoiceCall = async () => {
-    try {
-      await initiateCall(userId, 'voice');
-    } catch (error) {
-      console.error('Failed to start voice call:', error);
-      alert('Failed to start call. Please try again.');
-    }
-  };
-
-  const handleVideoCall = async () => {
-    try {
-      await initiateCall(userId, 'video');
-    } catch (error) {
-      console.error('Failed to start video call:', error);
-      alert('Failed to start call. Please try again.');
-    }
-  };
-
   const isDisabled = !!activeCall;
+
+  const call = async (type: 'voice' | 'video') => {
+    try {
+      await initiateCall(userId, type);
+    } catch (err) {
+      console.error(`Failed to start ${type} call:`, err);
+    }
+  };
 
   if (compact) {
     return (
       <div className="flex items-center gap-1">
         <button
-          onClick={handleVoiceCall}
+          onClick={() => call('voice')}
           disabled={isDisabled}
-          className="p-1.5 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
           title={`Voice call ${userName}`}
+          className="p-1.5 rounded-lg text-gray-500 hover:text-green-400 hover:bg-green-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          <FaPhone className="w-3.5 h-3.5" />
+          <PhoneIcon size={13} />
         </button>
         <button
-          onClick={handleVideoCall}
+          onClick={() => call('video')}
           disabled={isDisabled}
-          className="p-1.5 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           title={`Video call ${userName}`}
+          className="p-1.5 rounded-lg text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          <FaVideo className="w-3.5 h-3.5" />
+          <VideoIcon size={13} />
         </button>
       </div>
     );
@@ -64,22 +60,22 @@ export const DMCallButton: React.FC<DMCallButtonProps> = ({
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={handleVoiceCall}
+        onClick={() => call('voice')}
         disabled={isDisabled}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         title={`Voice call ${userName}`}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-green-500/10 text-green-400 hover:bg-green-500/18 border border-green-500/15 hover:border-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm font-medium"
       >
-        <FaPhone className="w-4 h-4" />
-        <span className="text-sm font-medium">Voice Call</span>
+        <PhoneIcon size={14} />
+        Voice
       </button>
       <button
-        onClick={handleVideoCall}
+        onClick={() => call('video')}
         disabled={isDisabled}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         title={`Video call ${userName}`}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500/18 border border-blue-500/15 hover:border-blue-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm font-medium"
       >
-        <FaVideo className="w-4 h-4" />
-        <span className="text-sm font-medium">Video Call</span>
+        <VideoIcon size={14} />
+        Video
       </button>
     </div>
   );

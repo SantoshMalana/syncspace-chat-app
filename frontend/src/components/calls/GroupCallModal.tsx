@@ -1,11 +1,4 @@
-// frontend/src/components/calls/GroupCallModal.tsx
-// Full-screen group call UI — shows a responsive video/voice grid for all participants
-
 import React, { useEffect, useRef, useState } from 'react';
-import {
-    FaMicrophone, FaMicrophoneSlash,
-    FaVideo, FaVideoSlash, FaPhone, FaUsers
-} from 'react-icons/fa';
 import type { GroupCallParticipant, CallType } from '../../types/call.types';
 
 interface GroupCallModalProps {
@@ -21,8 +14,46 @@ interface GroupCallModalProps {
     onLeave: () => void;
 }
 
-// Individual participant tile
-const ParticipantTile: React.FC<{
+// ── SVG icons ─────────────────────────────────────────────────────────────────
+const MicOn = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+);
+const MicOff = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23" />
+        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+        <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+);
+const CamOn = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7" />
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+);
+const CamOff = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
+        <path d="M7.5 4H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+);
+const UsersIcon = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+);
+
+// ── Participant tile ──────────────────────────────────────────────────────────
+const Tile: React.FC<{
     participant: GroupCallParticipant;
     isLocal?: boolean;
     isMuted?: boolean;
@@ -36,110 +67,76 @@ const ParticipantTile: React.FC<{
         }
     }, [participant.stream]);
 
-    const hasVideo = participant.stream &&
-        participant.stream.getVideoTracks().length > 0 &&
-        (isLocal ? isVideoEnabled !== false : true);
+    const hasVideo = !!(
+        participant.stream &&
+        participant.stream.getVideoTracks().some(t => t.enabled && t.readyState === 'live') &&
+        (isLocal ? isVideoEnabled !== false : true)
+    );
 
     const initials = participant.name
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
+        .split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
     return (
-        <div style={{
-            position: 'relative',
-            background: '#1a1a2e',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '160px',
-            border: '2px solid rgba(255,255,255,0.08)',
-        }}>
-            {hasVideo ? (
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted={isLocal}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        transform: isLocal ? 'scaleX(-1)' : 'none',
-                    }}
-                />
-            ) : (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '12px',
-                }}>
-                    {participant.avatar ? (
-                        <img
-                            src={participant.avatar}
-                            alt={participant.name}
-                            style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }}
-                        />
-                    ) : (
-                        <div style={{
-                            width: 72, height: 72, borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 28, fontWeight: 'bold', color: 'white',
-                        }}>
-                            {initials}
-                        </div>
-                    )}
-                    <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14 }}>{participant.name}</span>
+        <div className="gcm-tile">
+            {/* Video */}
+            <video
+                ref={videoRef}
+                autoPlay playsInline
+                muted={isLocal}
+                className={`gcm-tile-video${isLocal ? ' gcm-tile-mirror' : ''}`}
+                style={{ opacity: hasVideo ? 1 : 0 }}
+            />
+
+            {/* Avatar fallback */}
+            {!hasVideo && (
+                <div className="gcm-tile-avatar-wrap">
+                    <div className="gcm-tile-avatar">
+                        {participant.avatar
+                            ? <img src={participant.avatar} alt={participant.name} />
+                            : <span>{initials}</span>
+                        }
+                    </div>
+                    <p className="gcm-tile-name-center">{participant.name}{isLocal ? ' (You)' : ''}</p>
                 </div>
             )}
 
-            {/* Name badge */}
-            <div style={{
-                position: 'absolute', bottom: 8, left: 8,
-                background: 'rgba(0,0,0,0.6)', borderRadius: 6,
-                padding: '2px 8px', fontSize: 12, color: 'white',
-                display: 'flex', alignItems: 'center', gap: 4,
-                backdropFilter: 'blur(4px)',
-            }}>
-                {isMuted && <FaMicrophoneSlash size={10} color="#ef4444" />}
-                {participant.name}{isLocal ? ' (You)' : ''}
+            {/* Bottom name badge */}
+            <div className="gcm-tile-badge">
+                {isMuted && (
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                    </svg>
+                )}
+                <span>{participant.name}{isLocal ? ' (You)' : ''}</span>
             </div>
+
+            {/* Speaking indicator — placeholder, add audio-level logic if desired */}
+            {isLocal && !isMuted && <div className="gcm-tile-ring" />}
         </div>
     );
 };
 
+// ── Group call modal ──────────────────────────────────────────────────────────
 export const GroupCallModal: React.FC<GroupCallModalProps> = ({
-    channelName,
-    callType,
-    participants,
-    localStream,
-    isMuted,
-    isVideoEnabled,
-    currentUserId,
-    onToggleMute,
-    onToggleVideo,
-    onLeave,
+    channelName, callType, participants,
+    localStream, isMuted, isVideoEnabled,
+    currentUserId, onToggleMute, onToggleVideo, onLeave,
 }) => {
     const [showControls, setShowControls] = useState(true);
-    const controlsTimeout = useRef<ReturnType<typeof setTimeout>>();
+    const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
-    const handleMouseMove = () => {
+    const nudge = () => {
         setShowControls(true);
-        if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
-        controlsTimeout.current = setTimeout(() => setShowControls(false), 3000);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setShowControls(false), 4000);
     };
 
     useEffect(() => {
-        return () => { if (controlsTimeout.current) clearTimeout(controlsTimeout.current); };
+        nudge();
+        return () => { if (timerRef.current) clearTimeout(timerRef.current); };
     }, []);
 
-    // Build participant list: local user first, then remotes
     const localParticipant: GroupCallParticipant = {
         userId: currentUserId,
         name: 'You',
@@ -149,145 +146,220 @@ export const GroupCallModal: React.FC<GroupCallModalProps> = ({
     const remoteParticipants = participants.filter(p => p.userId !== currentUserId);
     const allParticipants = [localParticipant, ...remoteParticipants];
     const count = allParticipants.length;
-
-    // Responsive grid columns
     const cols = count <= 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : 4;
 
     return (
-        <div
-            onMouseMove={handleMouseMove}
-            onMouseEnter={() => setShowControls(true)}
-            style={{
-                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                background: '#0d0d1a',
-                zIndex: 10000,
-                display: 'flex',
-                flexDirection: 'column',
-            }}
-        >
+        <div className="gcm" onMouseMove={nudge} onTouchStart={nudge}>
+
             {/* Header */}
-            <div style={{
-                padding: '16px 24px',
-                background: 'rgba(0,0,0,0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backdropFilter: 'blur(10px)',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
-                transition: 'opacity 0.3s',
-                opacity: showControls ? 1 : 0,
-                pointerEvents: showControls ? 'all' : 'none',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                        width: 36, height: 36, borderRadius: '50%',
-                        background: callType === 'video' ? 'rgba(59,130,246,0.2)' : 'rgba(34,197,94,0.2)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                        {callType === 'video'
-                            ? <FaVideo size={16} color="#3b82f6" />
-                            : <FaMicrophone size={16} color="#22c55e" />
-                        }
+            <div className={`gcm-header ${showControls ? 'gcm-show' : 'gcm-hide'}`}>
+                <div className="gcm-header-left">
+                    <div className={`gcm-header-icon ${callType === 'video' ? 'gcm-header-icon-video' : 'gcm-header-icon-voice'}`}>
+                        {callType === 'video' ? <CamOn /> : <MicOn />}
                     </div>
                     <div>
-                        <div style={{ color: 'white', fontWeight: 600, fontSize: 16 }}>
+                        <p className="gcm-header-title">
                             {callType === 'video' ? 'Video Call' : 'Voice Call'}
-                            {channelName ? ` — #${channelName}` : ''}
-                        </div>
-                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <FaUsers size={10} />
+                            {channelName && <span className="gcm-header-channel"> · #{channelName}</span>}
+                        </p>
+                        <p className="gcm-header-sub">
+                            <UsersIcon />
                             {count} participant{count !== 1 ? 's' : ''}
-                        </div>
+                        </p>
                     </div>
                 </div>
             </div>
 
-            {/* Video Grid */}
-            <div style={{
-                flex: 1,
-                padding: 16,
-                display: 'grid',
-                gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                gap: 12,
-                alignContent: 'center',
-                overflow: 'hidden',
-            }}>
-                {allParticipants.map((p, idx) => (
-                    <ParticipantTile
+            {/* Grid */}
+            <div
+                className="gcm-grid"
+                style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+            >
+                {allParticipants.map((p, i) => (
+                    <Tile
                         key={p.userId}
                         participant={p}
-                        isLocal={idx === 0}
-                        isMuted={idx === 0 ? isMuted : false}
-                        isVideoEnabled={idx === 0 ? isVideoEnabled : true}
+                        isLocal={i === 0}
+                        isMuted={i === 0 ? isMuted : false}
+                        isVideoEnabled={i === 0 ? isVideoEnabled : true}
                     />
                 ))}
             </div>
 
-            {/* Controls Bar */}
-            <div style={{
-                padding: '20px 32px',
-                background: 'rgba(0,0,0,0.6)',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: 16,
-                backdropFilter: 'blur(10px)',
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                transition: 'opacity 0.3s',
-                opacity: showControls ? 1 : 0,
-                pointerEvents: showControls ? 'all' : 'none',
-            }}>
+            {/* Controls */}
+            <div className={`gcm-controls ${showControls ? 'gcm-show' : 'gcm-hide'}`}>
+
                 {/* Mute */}
                 <button
                     onClick={onToggleMute}
+                    className={`gcm-btn ${isMuted ? 'gcm-btn-danger' : 'gcm-btn-default'}`}
                     title={isMuted ? 'Unmute' : 'Mute'}
-                    style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                        padding: '14px 20px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                        background: isMuted ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)',
-                        color: 'white', minWidth: 80,
-                        outline: isMuted ? '2px solid #ef4444' : 'none',
-                        transition: 'all 0.2s',
-                    }}
                 >
-                    {isMuted ? <FaMicrophoneSlash size={20} /> : <FaMicrophone size={20} />}
-                    <span style={{ fontSize: 11, fontWeight: 500 }}>{isMuted ? 'Unmute' : 'Mute'}</span>
+                    <span className="gcm-btn-icon">{isMuted ? <MicOff /> : <MicOn />}</span>
+                    <span className="gcm-btn-label">{isMuted ? 'Unmute' : 'Mute'}</span>
                 </button>
 
-                {/* Camera (only for video calls) */}
+                {/* Camera (video calls only) */}
                 {callType === 'video' && (
                     <button
                         onClick={onToggleVideo}
-                        title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
-                        style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                            padding: '14px 20px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                            background: !isVideoEnabled ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)',
-                            color: 'white', minWidth: 80,
-                            outline: !isVideoEnabled ? '2px solid #ef4444' : 'none',
-                            transition: 'all 0.2s',
-                        }}
+                        className={`gcm-btn ${!isVideoEnabled ? 'gcm-btn-danger' : 'gcm-btn-default'}`}
+                        title={isVideoEnabled ? 'Stop camera' : 'Start camera'}
                     >
-                        {isVideoEnabled ? <FaVideo size={20} /> : <FaVideoSlash size={20} />}
-                        <span style={{ fontSize: 11, fontWeight: 500 }}>{isVideoEnabled ? 'Stop Video' : 'Start Video'}</span>
+                        <span className="gcm-btn-icon">{isVideoEnabled ? <CamOn /> : <CamOff />}</span>
+                        <span className="gcm-btn-label">{isVideoEnabled ? 'Camera' : 'Camera'}</span>
                     </button>
                 )}
 
                 {/* Leave */}
-                <button
-                    onClick={onLeave}
-                    title="Leave call"
-                    style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                        padding: '14px 20px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                        background: 'rgba(239,68,68,0.9)',
-                        color: 'white', minWidth: 80,
-                        transition: 'all 0.2s',
-                    }}
-                >
-                    <FaPhone size={20} style={{ transform: 'rotate(135deg)' }} />
-                    <span style={{ fontSize: 11, fontWeight: 500 }}>Leave</span>
+                <button onClick={onLeave} className="gcm-btn gcm-btn-end" title="Leave call">
+                    <span className="gcm-btn-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+                        </svg>
+                    </span>
+                    <span className="gcm-btn-label">Leave</span>
                 </button>
             </div>
+
+            <style>{`
+        .gcm {
+          position: fixed; inset: 0; z-index: 10000;
+          background: #090912;
+          display: flex; flex-direction: column;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        /* Header */
+        .gcm-header {
+          padding: 14px 22px;
+          background: linear-gradient(180deg, rgba(0,0,0,.7) 0%, transparent 100%);
+          display: flex; align-items: center; justify-content: space-between;
+          position: absolute; top: 0; left: 0; right: 0;
+          z-index: 10; transition: opacity .3s ease;
+        }
+        .gcm-header-left { display: flex; align-items: center; gap: 10px; }
+        .gcm-header-icon {
+          width: 34px; height: 34px; border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .gcm-header-icon-video { background: rgba(59,130,246,.18); color: #60a5fa; }
+        .gcm-header-icon-voice { background: rgba(34,197,94,.15); color: #4ade80; }
+        .gcm-header-title {
+          color: white; font-size: 14px; font-weight: 600; margin: 0;
+        }
+        .gcm-header-channel { color: rgba(255,255,255,.5); font-weight: 400; }
+        .gcm-header-sub {
+          color: rgba(255,255,255,.4); font-size: 11px; margin: 2px 0 0;
+          display: flex; align-items: center; gap: 4px;
+        }
+
+        /* Grid */
+        .gcm-grid {
+          flex: 1; display: grid; gap: 10px;
+          padding: 60px 14px 80px;
+          align-content: center; overflow: hidden;
+        }
+
+        /* Tile */
+        .gcm-tile {
+          position: relative; background: #12121e;
+          border-radius: 14px; overflow: hidden;
+          display: flex; align-items: center; justify-content: center;
+          min-height: 150px; border: 1.5px solid rgba(255,255,255,.07);
+        }
+        .gcm-tile-video {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%; object-fit: cover;
+          transition: opacity .3s ease;
+        }
+        .gcm-tile-mirror { transform: scaleX(-1); }
+        .gcm-tile-avatar-wrap {
+          display: flex; flex-direction: column;
+          align-items: center; gap: 10px; z-index: 1;
+        }
+        .gcm-tile-avatar {
+          width: 64px; height: 64px; border-radius: 50%;
+          background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
+          display: flex; align-items: center; justify-content: center;
+          overflow: hidden;
+          box-shadow: 0 6px 20px rgba(0,0,0,.5);
+        }
+        .gcm-tile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .gcm-tile-avatar span { font-size: 24px; font-weight: 700; color: white; }
+        .gcm-tile-name-center {
+          color: rgba(255,255,255,.7); font-size: 13px; margin: 0;
+        }
+        .gcm-tile-badge {
+          position: absolute; bottom: 8px; left: 8px;
+          background: rgba(0,0,0,.55); border-radius: 7px;
+          padding: 3px 8px; font-size: 11px; color: rgba(255,255,255,.85);
+          display: flex; align-items: center; gap: 4px;
+          backdrop-filter: blur(6px); z-index: 2;
+          border: 1px solid rgba(255,255,255,.07);
+        }
+        .gcm-tile-ring {
+          position: absolute; inset: -2px; border-radius: 15px;
+          border: 2px solid rgba(16,185,129,.5);
+          pointer-events: none; z-index: 3;
+        }
+
+        /* Controls */
+        .gcm-controls {
+          position: absolute; bottom: 0; left: 0; right: 0;
+          padding: 18px 24px 28px;
+          background: linear-gradient(0deg, rgba(0,0,0,.75) 0%, transparent 100%);
+          display: flex; justify-content: center; gap: 12px;
+          z-index: 10; transition: opacity .3s ease;
+        }
+        .gcm-show { opacity: 1; pointer-events: all; }
+        .gcm-hide { opacity: 0; pointer-events: none; }
+
+        /* Buttons — exactly same system as VideoCallModal */
+        .gcm-btn {
+          display: flex; flex-direction: column; align-items: center; gap: 6px;
+          padding: 13px 20px; border-radius: 14px; cursor: pointer;
+          transition: all .18s ease; min-width: 78px;
+          backdrop-filter: blur(16px); border: 1px solid transparent;
+        }
+        .gcm-btn-icon { display: flex; align-items: center; justify-content: center; }
+        .gcm-btn-label { font-size: 11px; font-weight: 500; }
+
+        .gcm-btn-default {
+          background: rgba(255,255,255,.1);
+          border-color: rgba(255,255,255,.13);
+          color: white;
+        }
+        .gcm-btn-default:hover {
+          background: rgba(255,255,255,.18);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0,0,0,.4);
+        }
+        .gcm-btn-danger {
+          background: rgba(239,68,68,.2);
+          border-color: rgba(239,68,68,.4);
+          color: #f87171;
+        }
+        .gcm-btn-danger:hover { background: rgba(239,68,68,.3); transform: translateY(-2px); }
+        .gcm-btn-end {
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+          border-color: transparent; color: white;
+          box-shadow: 0 4px 16px rgba(239,68,68,.35);
+          padding: 13px 28px;
+        }
+        .gcm-btn-end:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(239,68,68,.5);
+        }
+
+        @media (max-width: 480px) {
+          .gcm-grid { padding: 56px 8px 72px; gap: 7px; }
+          .gcm-tile { min-height: 110px; }
+          .gcm-btn { padding: 11px 14px; min-width: 64px; }
+          .gcm-btn-end { padding: 11px 22px; }
+          .gcm-controls { gap: 8px; padding-bottom: 22px; }
+        }
+      `}</style>
         </div>
     );
 };

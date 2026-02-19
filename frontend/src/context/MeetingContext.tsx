@@ -67,7 +67,10 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loginAlerts, setLoginAlerts] = useState<MeetingAlert[]>([]);
+  // ✅ FIX: Track reminder toasts separately from login alerts
+  const [reminderToasts, setReminderToasts] = useState<MeetingAlert[]>([]);
   const alertsShownRef = useRef(false);
+  const remindedMeetingIds = useRef<Set<string>>(new Set());
 
   // ✅ FIX: Listen for token being set (i.e. after login) so alert runs at right time
   useEffect(() => {
@@ -214,17 +217,58 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   }, [currentMeeting]);
 
-  const toggleAudio = useCallback(() => {}, []);
-  const toggleVideo = useCallback(() => {}, []);
-  const toggleScreenShare = useCallback(async (): Promise<void> => {}, []);
-  const removeMeetingParticipant = useCallback(async (_uid: string): Promise<void> => {}, []);
+  const toggleAudio = useCallback(() => { }, []);
+  const toggleVideo = useCallback(() => { }, []);
+  const toggleScreenShare = useCallback(async (): Promise<void> => { }, []);
+  const removeMeetingParticipant = useCallback(async (_uid: string): Promise<void> => { }, []);
 
-  // ✅ FIX: Only fetch meetings (and show alerts) once token is actually set
+  // ✅ FIX: Only fetch meetings (and show alerts) once BOTH token AND user are set
   useEffect(() => {
-    if (!token) return; // 🔑 Don't run until user is logged in
+    if (!token) return;
+    // Extra guard: ensure user is actually logged in (not just a stale token)
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
     getUpcomingMeetings()
       .then(buildLoginAlerts)
-      .catch(() => {}); // silently fail — user might not be authenticated yet
+      .catch(() => { }); // silently fail
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ✅ FIX: Poll every 60s for upcoming meetings and show reminder toasts
+  useEffect(() => {
+    if (!token) return;
+    const checkReminders = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/meetings?status=scheduled,ongoing`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        const meetings: Meeting[] = res.data.meetings || [];
+        const now = new Date();
+        meetings.forEach((m) => {
+          if (remindedMeetingIds.current.has(m._id)) return;
+          const scheduledFor = new Date(m.scheduledFor);
+          const minutesUntil = differenceInMinutes(scheduledFor, now);
+          // Remind when meeting is between 0 and 5 minutes away
+          if (minutesUntil >= 0 && minutesUntil <= 5) {
+            remindedMeetingIds.current.add(m._id);
+            const alert: MeetingAlert = {
+              id: `reminder-${m._id}`,
+              title: m.title,
+              scheduledFor,
+              timeLabel: minutesUntil === 0 ? 'Starting now!' : `Starts in ${minutesUntil} min`,
+            };
+            setReminderToasts(prev => [...prev, alert]);
+            // Auto-dismiss after 30 seconds
+            setTimeout(() => {
+              setReminderToasts(prev => prev.filter(a => a.id !== alert.id));
+            }, 30000);
+          }
+        });
+      } catch { /* ignore */ }
+    };
+    const interval = setInterval(checkReminders, 60000);
+    // Also run immediately on mount
+    checkReminders();
+    return () => clearInterval(interval);
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value: MeetingContextType = {
@@ -239,6 +283,46 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <MeetingContext.Provider value={value}>
       {children}
       <MeetingAlertToast alerts={loginAlerts} onDismiss={(id) => setLoginAlerts((p) => p.filter((a) => a.id !== id))} />
+      {/* ✅ FIX: Reminder toasts for upcoming meetings (shown during active session) */}
+      {reminderToasts.length > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 99999,
+          display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360,
+        }}>
+          {reminderToasts.map((toast) => (
+            <div key={toast.id} style={{
+              background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+              border: '1px solid rgba(99,102,241,0.5)',
+              borderRadius: 16, padding: '16px 20px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              display: 'flex', gap: 14, alignItems: 'flex-start',
+              animation: 'slideInUp 0.3s ease',
+            }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: 'rgba(99,102,241,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 22, flexShrink: 0,
+              }}>📅</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: 1 }}>Meeting Reminder</p>
+                <p style={{ margin: '4px 0 2px', fontSize: 15, fontWeight: 700, color: 'white' }}>{toast.title}</p>
+                <p style={{ margin: 0, fontSize: 13, color: '#f59e0b', fontWeight: 600 }}>⏰ {toast.timeLabel}</p>
+              </div>
+              <button
+                onClick={() => setReminderToasts(p => p.filter(a => a.id !== toast.id))}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+              >×</button>
+            </div>
+          ))}
+          <style>{`
+            @keyframes slideInUp {
+              from { transform: translateY(20px); opacity: 0; }
+              to   { transform: translateY(0); opacity: 1; }
+            }
+          `}</style>
+        </div>
+      )}
     </MeetingContext.Provider>
   );
 };

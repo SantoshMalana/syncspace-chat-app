@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { User, Message } from '../types';
 
 interface SearchModalProps {
@@ -10,302 +10,343 @@ interface SearchModalProps {
     onSelectMessage?: (message: Message) => void;
 }
 
-const SearchModal = ({ 
-    isOpen, 
-    onClose, 
-    workspaceMembers, 
+type Tab = 'all' | 'people' | 'messages';
+
+const getInitials = (name: string) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ').filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const Highlight = ({ text, query }: { text: string; query: string }) => {
+    if (!query.trim()) return <>{text}</>;
+    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    return (
+        <>
+            {parts.map((part, i) =>
+                part.toLowerCase() === query.toLowerCase()
+                    ? <mark key={i} className="bg-primary/25 text-primary rounded-sm px-0.5">{part}</mark>
+                    : <span key={i}>{part}</span>
+            )}
+        </>
+    );
+};
+
+const SearchModal = ({
+    isOpen,
+    onClose,
+    workspaceMembers,
     currentWorkspaceId,
     onSelectUser,
-    onSelectMessage 
+    onSelectMessage,
 }: SearchModalProps) => {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<{
-        members: User[];
-        messages: Message[];
-    }>({
-        members: [],
-        messages: []
-    });
-    const [isSearching, setIsSearching] = useState(false);
-    const [activeTab, setActiveTab] = useState<'all' | 'members' | 'messages'>('all');
+    const [query, setQuery] = useState('');
+    const [tab, setTab] = useState<Tab>('all');
+    const [members, setMembers] = useState<User[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
+    const listRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (isOpen && inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, [isOpen]);
-
+    // Reset on close
     useEffect(() => {
         if (!isOpen) {
-            setSearchQuery('');
-            setSearchResults({ members: [], messages: [] });
-            setActiveTab('all');
+            setQuery('');
+            setMembers([]);
+            setMessages([]);
+            setTab('all');
+            setActiveIndex(0);
+        } else {
+            setTimeout(() => inputRef.current?.focus(), 50);
         }
     }, [isOpen]);
 
+    // Debounced search
     useEffect(() => {
-        const delayDebounceFn = setTimeout(() => {
-            if (searchQuery.trim()) {
-                performSearch();
-            } else {
-                setSearchResults({ members: [], messages: [] });
-            }
-        }, 300);
+        if (!query.trim()) {
+            setMembers([]);
+            setMessages([]);
+            return;
+        }
+        const id = setTimeout(performSearch, 280);
+        return () => clearTimeout(id);
+    }, [query, currentWorkspaceId]);
 
-        return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery, currentWorkspaceId]);
+    // Reset active index on results change
+    useEffect(() => { setActiveIndex(0); }, [members, messages, tab]);
 
     const performSearch = async () => {
-        setIsSearching(true);
+        setLoading(true);
         try {
-            // Search members locally
-            const filteredMembers = workspaceMembers.filter(member =>
-                member.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                member.email.toLowerCase().includes(searchQuery.toLowerCase())
-            ).slice(0, 5);
+            const filteredMembers = workspaceMembers
+                .filter(m =>
+                    m.fullName.toLowerCase().includes(query.toLowerCase()) ||
+                    m.email.toLowerCase().includes(query.toLowerCase())
+                )
+                .slice(0, 6);
 
-            // Search messages via API
-            const response = await fetch(
-                `${import.meta.env.VITE_API_URL}/api/messages/search?workspaceId=${currentWorkspaceId}&query=${encodeURIComponent(searchQuery)}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
+            const res = await fetch(
+                `${import.meta.env.VITE_API_URL}/api/messages/search?workspaceId=${currentWorkspaceId}&query=${encodeURIComponent(query)}`,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
             );
 
-            let messages: Message[] = [];
-            if (response.ok) {
-                const data = await response.json();
-                messages = data.messages || [];
+            let msgs: Message[] = [];
+            if (res.ok) {
+                const data = await res.json();
+                msgs = (data.messages || []).slice(0, 10);
             }
 
-            setSearchResults({
-                members: filteredMembers,
-                messages: messages.slice(0, 10),
-            });
-        } catch (error) {
-            console.error('Search error:', error);
-            setSearchResults({
-                members: workspaceMembers.filter(member =>
-                    member.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    member.email.toLowerCase().includes(searchQuery.toLowerCase())
-                ).slice(0, 5),
-                messages: [],
-            });
+            setMembers(filteredMembers);
+            setMessages(msgs);
+        } catch {
+            setMembers(
+                workspaceMembers
+                    .filter(m => m.fullName.toLowerCase().includes(query.toLowerCase()))
+                    .slice(0, 6)
+            );
+            setMessages([]);
         } finally {
-            setIsSearching(false);
+            setLoading(false);
         }
     };
 
-    const getInitials = (name: string) => {
-        return name.split(' ').map(n => n[0]).join('').toUpperCase();
-    };
-
-    const highlightText = (text: string, query: string) => {
-        if (!query.trim()) return text;
-        
-        const parts = text.split(new RegExp(`(${query})`, 'gi'));
-        return parts.map((part, i) => 
-            part.toLowerCase() === query.toLowerCase() 
-                ? <mark key={i} className="bg-primary/30 text-white">{part}</mark>
-                : part
-        );
-    };
+    // Build flat list for keyboard nav
+    const visibleMembers = tab === 'messages' ? [] : members;
+    const visibleMessages = tab === 'people' ? [] : messages;
+    const totalItems = visibleMembers.length + visibleMessages.length;
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            onClose();
+        if (e.key === 'Escape') { onClose(); return; }
+        if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(i => Math.min(i + 1, totalItems - 1)); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex < visibleMembers.length) {
+                onSelectUser(visibleMembers[activeIndex]);
+                onClose();
+            } else {
+                const msgIdx = activeIndex - visibleMembers.length;
+                if (visibleMessages[msgIdx]) {
+                    onSelectMessage?.(visibleMessages[msgIdx]);
+                    onClose();
+                }
+            }
         }
     };
 
     if (!isOpen) return null;
 
-    const filteredResults = {
-        members: activeTab === 'messages' ? [] : searchResults.members,
-        messages: activeTab === 'members' ? [] : searchResults.messages,
-    };
-
-    const totalResults = filteredResults.members.length + filteredResults.messages.length;
+    const isEmpty = !query.trim();
+    const noResults = query.trim() && !loading && totalItems === 0;
 
     return (
-        <div className="fixed inset-0 bg-black/80 flex items-start justify-center z-50 p-4 pt-20">
-            <div className="bg-[#0f0f0f] rounded-2xl w-full max-w-2xl border border-[#1f1f1f] shadow-2xl">
-                {/* Search Input */}
-                <div className="p-4 border-b border-[#1f1f1f]">
-                    <div className="relative">
-                        <svg 
-                            className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500"
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                        >
+        <div
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-start justify-center z-50 pt-[15vh] px-4"
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div className="w-full max-w-xl bg-[#0d0d0d] rounded-2xl border border-[#1a1a1a] shadow-2xl shadow-black/60 overflow-hidden">
+
+                {/* ── Search input ── */}
+                <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[#1a1a1a]">
+                    {loading ? (
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                    ) : (
+                        <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Search messages and people..."
-                            className="w-full pl-12 pr-4 py-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                        />
-                        {isSearching && (
-                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Tabs */}
-                    <div className="flex gap-2 mt-3">
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                activeTab === 'all'
-                                    ? 'bg-primary/20 text-primary'
-                                    : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'
-                            }`}
-                        >
-                            All
+                    )}
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Search people and messages..."
+                        className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 focus:outline-none"
+                    />
+                    {query && (
+                        <button onClick={() => setQuery('')} className="text-gray-600 hover:text-gray-400 transition-colors flex-shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         </button>
-                        <button
-                            onClick={() => setActiveTab('members')}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                activeTab === 'members'
-                                    ? 'bg-primary/20 text-primary'
-                                    : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'
-                            }`}
-                        >
-                            People
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('messages')}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                                activeTab === 'messages'
-                                    ? 'bg-primary/20 text-primary'
-                                    : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'
-                            }`}
-                        >
-                            Messages
-                        </button>
-                    </div>
+                    )}
+                    <kbd className="hidden sm:flex items-center px-1.5 py-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-[10px] text-gray-600 flex-shrink-0">
+                        ESC
+                    </kbd>
                 </div>
 
-                {/* Results */}
-                <div className="max-h-[500px] overflow-y-auto">
-                    {!searchQuery.trim() ? (
-                        <div className="p-8 text-center">
-                            <svg className="w-16 h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <p className="text-gray-400 text-sm">Start typing to search messages and people</p>
-                            <p className="text-gray-600 text-xs mt-2">Press ESC to close</p>
+                {/* ── Tabs (only when results exist) ── */}
+                {!isEmpty && (members.length > 0 || messages.length > 0) && (
+                    <div className="flex gap-1 px-3 py-2 border-b border-[#1a1a1a]">
+                        {([
+                            { id: 'all', label: 'All', count: members.length + messages.length },
+                            { id: 'people', label: 'People', count: members.length },
+                            { id: 'messages', label: 'Messages', count: messages.length },
+                        ] as { id: Tab; label: string; count: number }[]).map(t => (
+                            <button
+                                key={t.id}
+                                onClick={() => setTab(t.id)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${tab === t.id
+                                        ? 'bg-primary/15 text-primary'
+                                        : 'text-gray-500 hover:text-gray-300 hover:bg-[#1a1a1a]'
+                                    }`}
+                            >
+                                {t.label}
+                                {t.count > 0 && (
+                                    <span className={`px-1 rounded text-[10px] ${tab === t.id ? 'bg-primary/20 text-primary' : 'bg-[#1a1a1a] text-gray-600'}`}>
+                                        {t.count}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* ── Results ── */}
+                <div ref={listRef} className="max-h-[420px] overflow-y-auto">
+
+                    {/* Empty state */}
+                    {isEmpty && (
+                        <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+                            <div className="w-12 h-12 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mb-3">
+                                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                            <p className="text-sm text-gray-500">Search people and messages</p>
+                            <p className="text-xs text-gray-700 mt-1">Type to get started</p>
                         </div>
-                    ) : totalResults === 0 && !isSearching ? (
-                        <div className="p-8 text-center">
-                            <p className="text-gray-400">No results found for "{searchQuery}"</p>
+                    )}
+
+                    {/* No results */}
+                    {noResults && (
+                        <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+                            <p className="text-sm text-gray-500">No results for <span className="text-white">"{query}"</span></p>
+                            <p className="text-xs text-gray-700 mt-1">Try a different search term</p>
                         </div>
-                    ) : (
-                        <div className="p-2">
-                            {/* Members Results */}
-                            {filteredResults.members.length > 0 && (
-                                <div className="mb-4">
-                                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 py-2">
-                                        People ({filteredResults.members.length})
-                                    </h3>
-                                    <div className="space-y-1">
-                                        {filteredResults.members.map(member => (
+                    )}
+
+                    {/* Results list */}
+                    {!isEmpty && !noResults && (
+                        <div className="py-2">
+
+                            {/* People */}
+                            {visibleMembers.length > 0 && (
+                                <div className="mb-1">
+                                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest px-4 py-1.5">
+                                        People
+                                    </p>
+                                    {visibleMembers.map((member, i) => {
+                                        const isActive = activeIndex === i;
+                                        return (
                                             <button
                                                 key={member._id || member.id}
-                                                onClick={() => {
-                                                    onSelectUser(member);
-                                                    onClose();
-                                                }}
-                                                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1a1a1a] transition-colors text-left"
+                                                onClick={() => { onSelectUser(member); onClose(); }}
+                                                onMouseEnter={() => setActiveIndex(i)}
+                                                className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left ${isActive ? 'bg-[#161616]' : 'hover:bg-[#111]'}`}
                                             >
-                                                <div className="relative">
-                                                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-white font-semibold">
-                                                        {getInitials(member.fullName)}
+                                                <div className="relative flex-shrink-0">
+                                                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500/40 to-indigo-600/40 flex items-center justify-center text-white text-xs font-bold">
+                                                        {member.avatar && !member.avatar.startsWith('/')
+                                                            ? <span className="text-base">{member.avatar}</span>
+                                                            : getInitials(member.fullName)
+                                                        }
                                                     </div>
                                                     {member.status === 'online' && (
-                                                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-[#0f0f0f] rounded-full" />
+                                                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-[#0d0d0d] rounded-full" />
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-medium text-white truncate">
-                                                        {highlightText(member.fullName, searchQuery)}
+                                                        <Highlight text={member.fullName} query={query} />
                                                     </p>
-                                                    <p className="text-xs text-gray-500 truncate">
-                                                        {highlightText(member.email, searchQuery)}
+                                                    <p className="text-xs text-gray-600 truncate">
+                                                        <Highlight text={member.email} query={query} />
                                                     </p>
                                                 </div>
-                                                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                </svg>
+                                                <div className={`flex items-center gap-1 text-[10px] text-gray-600 flex-shrink-0 ${isActive ? 'opacity-100' : 'opacity-0'}`}>
+                                                    <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-[10px]">↵</kbd>
+                                                </div>
                                             </button>
-                                        ))}
-                                    </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 
-                            {/* Messages Results */}
-                            {filteredResults.messages.length > 0 && (
+                            {/* Divider between sections */}
+                            {visibleMembers.length > 0 && visibleMessages.length > 0 && (
+                                <div className="mx-4 my-1 border-t border-[#1a1a1a]" />
+                            )}
+
+                            {/* Messages */}
+                            {visibleMessages.length > 0 && (
                                 <div>
-                                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 py-2">
-                                        Messages ({filteredResults.messages.length})
-                                    </h3>
-                                    <div className="space-y-1">
-                                        {filteredResults.messages.map(message => {
-                                            const sender = typeof message.senderId === 'object' ? message.senderId : null;
-                                            return (
-                                                <button
-                                                    key={message._id}
-                                                    onClick={() => {
-                                                        onSelectMessage?.(message);
-                                                        onClose();
-                                                    }}
-                                                    className="w-full flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-[#1a1a1a] transition-colors text-left"
-                                                >
-                                                    {sender && (
-                                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-                                                            {getInitials(sender.fullName)}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <p className="text-sm font-medium text-white">
-                                                                {sender ? sender.fullName : 'Unknown'}
-                                                            </p>
-                                                            <span className="text-xs text-gray-500">
-                                                                {new Date(message.createdAt).toLocaleDateString()}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm text-gray-400 truncate">
-                                                            {highlightText(message.content, searchQuery)}
-                                                        </p>
+                                    <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest px-4 py-1.5">
+                                        Messages
+                                    </p>
+                                    {visibleMessages.map((message, i) => {
+                                        const idx = visibleMembers.length + i;
+                                        const isActive = activeIndex === idx;
+                                        const sender = typeof message.senderId === 'object' ? message.senderId as User : null;
+                                        const date = new Date(message.createdAt);
+                                        const isToday = date.toDateString() === new Date().toDateString();
+                                        const timeStr = isToday
+                                            ? date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                                            : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                                        return (
+                                            <button
+                                                key={message._id}
+                                                onClick={() => { onSelectMessage?.(message); onClose(); }}
+                                                onMouseEnter={() => setActiveIndex(idx)}
+                                                className={`w-full flex items-start gap-3 px-4 py-2.5 transition-colors text-left ${isActive ? 'bg-[#161616]' : 'hover:bg-[#111]'}`}
+                                            >
+                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500/30 to-indigo-600/30 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">
+                                                    {getInitials(sender?.fullName || 'U')}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <span className="text-xs font-semibold text-white">{sender?.fullName || 'Unknown'}</span>
+                                                        <span className="text-[10px] text-gray-600">{timeStr}</span>
                                                     </div>
-                                                    <svg className="w-5 h-5 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                    </svg>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                                    <p className="text-xs text-gray-400 truncate leading-relaxed">
+                                                        <Highlight text={message.content} query={query} />
+                                                    </p>
+                                                </div>
+                                                <div className={`flex-shrink-0 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0'}`}>
+                                                    <kbd className="px-1.5 py-0.5 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-[10px] text-gray-600">↵</kbd>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-3 border-t border-[#1f1f1f] bg-[#0a0a0a] rounded-b-2xl">
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>Use ↑↓ to navigate, Enter to select</span>
-                        <span>ESC to close</span>
+                {/* ── Footer ── */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-t border-[#1a1a1a] bg-[#0a0a0a]">
+                    <div className="flex items-center gap-3 text-[10px] text-gray-700">
+                        <span className="flex items-center gap-1">
+                            <kbd className="px-1 py-0.5 bg-[#1a1a1a] border border-[#222] rounded">↑↓</kbd>
+                            navigate
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <kbd className="px-1 py-0.5 bg-[#1a1a1a] border border-[#222] rounded">↵</kbd>
+                            select
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <kbd className="px-1 py-0.5 bg-[#1a1a1a] border border-[#222] rounded">ESC</kbd>
+                            close
+                        </span>
                     </div>
+                    {totalItems > 0 && (
+                        <span className="text-[10px] text-gray-700">{totalItems} result{totalItems !== 1 ? 's' : ''}</span>
+                    )}
                 </div>
             </div>
         </div>

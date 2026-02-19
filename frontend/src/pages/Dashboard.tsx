@@ -35,6 +35,10 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
+  const socketListenersRegistered = useRef(false);
+  const currentUserRef = useRef<User | null>(null);
+  const activeChannelRef = useRef<Channel | null>(null);
+  const activeDMUserRef = useRef<User | null>(null);
 
   // User state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -93,14 +97,9 @@ const Dashboard = () => {
 
   // ============ MEETING FUNCTIONALITY ============
   const {
-    upcomingMeetings,
-    currentMeeting,
     isInMeeting,
-    notifications: meetingNotifications,
-    createMeeting,
     joinMeeting,
     leaveMeeting,
-    endMeeting,
   } = useMeetingContext();
 
   // Meeting UI state
@@ -176,7 +175,7 @@ const Dashboard = () => {
 
   const handleLeaveMeeting = () => {
     if (activeMeeting) {
-      leaveMeeting(activeMeeting._id);
+      leaveMeeting();
     }
     setActiveMeeting(null);
   };
@@ -189,16 +188,7 @@ const Dashboard = () => {
     setIsMeetingsListOpen(true);
   };
 
-  // Meeting socket listeners
-  useEffect(() => {
-    if (!meetingNotifications) return;
-
-    meetingNotifications.forEach((notification) => {
-      if (notification.type === 'reminder' || notification.type === 'started' || notification.type === 'invitation') {
-        setMeetingNotificationsDisplay((prev) => [...prev, notification]);
-      }
-    });
-  }, [meetingNotifications]);
+  // Meeting socket listeners removed (notifications not in MeetingContextType)
 
   const initializeApp = async () => {
     try {
@@ -235,18 +225,21 @@ const Dashboard = () => {
 
       setWorkspaces(workspacesData.workspaces);
       const firstWorkspace = workspacesData.workspaces[0];
+      // ✅ FIX: Use _id || id to handle both MongoDB ObjectId formats
+      const firstWorkspaceId = firstWorkspace._id || firstWorkspace.id;
+      console.log('🏢 First workspace ID:', firstWorkspaceId, '| workspace:', firstWorkspace.name);
 
       setCurrentWorkspace(firstWorkspace);
-      joinWorkspace(firstWorkspace._id);
+      joinWorkspace(firstWorkspaceId);
 
       // Fetch workspace members
-      await fetchWorkspaceMembers(firstWorkspace._id);
+      await fetchWorkspaceMembers(firstWorkspaceId);
 
       // Fetch channels
-      await fetchChannelsForWorkspace(firstWorkspace._id);
+      await fetchChannelsForWorkspace(firstWorkspaceId);
 
       // Fetch DM conversations
-      await fetchDMConversations(firstWorkspace._id);
+      await fetchDMConversations(firstWorkspaceId);
 
       setLoading(false);
 
@@ -259,6 +252,11 @@ const Dashboard = () => {
 
   const fetchWorkspaceMembers = async (workspaceId: string) => {
     try {
+      if (!workspaceId) {
+        console.warn('⚠️ fetchWorkspaceMembers called with no workspaceId, skipping');
+        return;
+      }
+      console.log('📥 Fetching members for workspace:', workspaceId);
       const membersData: any = await workspaceAPI.getMembers(workspaceId);
 
       if (membersData && membersData.members && Array.isArray(membersData.members)) {
@@ -319,9 +317,11 @@ const Dashboard = () => {
       setShowCreateWorkspaceModal(false);
       setNewWorkspaceName('');
 
-      await fetchWorkspaceMembers(newWorkspace._id);
-      await fetchChannelsForWorkspace(newWorkspace._id);
-      await fetchDMConversations(newWorkspace._id);
+      // ✅ FIX: Use _id || id to handle both MongoDB ObjectId formats
+      const newWorkspaceId = newWorkspace._id || newWorkspace.id;
+      await fetchWorkspaceMembers(newWorkspaceId);
+      await fetchChannelsForWorkspace(newWorkspaceId);
+      await fetchDMConversations(newWorkspaceId);
 
     } catch (error: any) {
       console.error('❌ Error creating workspace:', error);
@@ -356,17 +356,19 @@ const Dashboard = () => {
         leaveChannel(activeChannel._id);
       }
 
-      await workspaceAPI.switchWorkspace(workspace._id);
+      // ✅ FIX: Use _id || id to handle both MongoDB ObjectId formats
+      const workspaceId = workspace._id || (workspace as any).id;
+      await workspaceAPI.switchWorkspace(workspaceId);
       setCurrentWorkspace(workspace);
       setShowWorkspaceMenu(false);
       setMessages([]);
       setActiveChannel(null);
 
-      joinWorkspace(workspace._id);
+      joinWorkspace(workspaceId);
 
-      await fetchWorkspaceMembers(workspace._id);
-      await fetchChannelsForWorkspace(workspace._id);
-      await fetchDMConversations(workspace._id);
+      await fetchWorkspaceMembers(workspaceId);
+      await fetchChannelsForWorkspace(workspaceId);
+      await fetchDMConversations(workspaceId);
 
     } catch (error: any) {
       console.error('❌ Error switching workspace:', error);
@@ -374,34 +376,51 @@ const Dashboard = () => {
     }
   };
 
-  const setupSocketListeners = (socket: any) => {
+  const  setupSocketListeners = (socket: any) => {
+    if (socketListenersRegistered.current) return;
+    socketListenersRegistered.current = true;
+
     socket.on('message:new', (message: Message) => {
-      setMessages(prev => [...prev, message]);
-      scrollToBottom();
+  // Deduplicate — only add if not already in list
+  setMessages(prev => {
+    if (prev.some(m => m._id === message._id)) return prev;
+    return [...prev, message];
+  });
 
-      // Mark as unread if from another user and we're not viewing it
-      const senderIdStr = typeof message.senderId === 'object' ? message.senderId._id : message.senderId;
-      const currentUserIdStr = currentUser?.id || currentUser?._id;
+  // ✅ FIX: Read from refs, not stale closure values
+  const senderIdStr = typeof message.senderId === 'object'
+    ? message.senderId._id
+    : message.senderId;
 
-      if (senderIdStr !== currentUserIdStr) {
-        // Channel message unread
-        if (message.channelId && message.channelId !== activeChannel?._id) {
-          setUnreadChannels(prev => new Set([...prev, message.channelId!]));
-        }
-        // Direct message unread
-        if (message.messageType === 'direct' && senderIdStr) {
-          const activeDMUserIdStr = activeDMUser?._id || activeDMUser?.id;
-          if (senderIdStr !== activeDMUserIdStr) {
-            setUnreadDMs(prev => {
-              const newMap = new Map(prev);
-              const current = newMap.get(senderIdStr) || 0;
-              newMap.set(senderIdStr, current + 1);
-              return newMap;
-            });
-          }
-        }
+  const currentUserIdStr =
+    currentUserRef.current?.id || currentUserRef.current?._id;
+
+  const currentActiveChannel = activeChannelRef.current;
+  const currentActiveDMUser = activeDMUserRef.current;
+
+  if (senderIdStr !== currentUserIdStr) {
+
+    // Channel unread
+    if (message.channelId && message.channelId !== currentActiveChannel?._id) {
+      setUnreadChannels(prev => new Set([...prev, message.channelId!]));
+    }
+
+    // DM unread
+    if (message.messageType === 'direct' && senderIdStr) {
+      const activeDMUserIdStr =
+        currentActiveDMUser?._id || currentActiveDMUser?.id;
+
+      if (senderIdStr !== activeDMUserIdStr) {
+        setUnreadDMs(prev => {
+          const newMap = new Map(prev);
+          newMap.set(senderIdStr, (newMap.get(senderIdStr) || 0) + 1);
+          return newMap;
+        });
       }
-    });
+    }
+  }
+});
+
 
     socket.on('message:updated', (message: Message) => {
       setMessages(prev => prev.map(m => m._id === message._id ? message : m));
@@ -669,6 +688,18 @@ const Dashboard = () => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
+  
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+  
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
+  
+  useEffect(() => {
+    activeDMUserRef.current = activeDMUser;
+  }, [activeDMUser]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -967,97 +998,110 @@ const Dashboard = () => {
   return (
     <div className="h-screen flex bg-[#0f0f0f] text-white">
 
-      {/* Workspace Sidebar */}
-      <aside className="w-64 bg-[#141414] border-r border-[#1f1f1f] flex flex-col">
+            {/* ═══════════════════════════════════════════════
+          SIDEBAR - Replace the entire <aside> block
+          from line: <aside className="w-64 bg-[#141414]...
+          to the closing: </aside>
+      ═══════════════════════════════════════════════ */}
 
-        {/* Workspace Header */}
-        <div className="p-4 border-b border-[#1f1f1f] relative">
+      <aside className="w-64 bg-[#141414] border-r border-[#1f1f1f] flex flex-col select-none">
+
+        {/* ── Workspace Header ── */}
+        <div className="px-4 py-3 border-b border-[#1f1f1f] relative">
           <button
             onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-            className="w-full flex items-center justify-between hover:bg-[#1f1f1f] p-2 -ml-2 rounded-lg transition-colors group"
+            className="w-full flex items-center justify-between hover:bg-[#1f1f1f] px-2 py-1.5 -mx-2 rounded-lg transition-colors group"
           >
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent text-left">
-                {currentWorkspace?.name || 'SyncSpace'}
-              </h1>
-              <p className="text-xs text-gray-500 mt-1 text-left">{currentUser?.fullName}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Workspace icon */}
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                {(currentWorkspace?.name || 'S').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 text-left">
+                <h1 className="text-sm font-bold text-white truncate leading-tight">
+                  {currentWorkspace?.name || 'SyncSpace'}
+                </h1>
+                <p className="text-[10px] text-green-400 font-medium leading-tight">● Active</p>
+              </div>
             </div>
-            <svg className={`w-5 h-5 text-gray-500 group-hover:text-white transition-transform ${showWorkspaceMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className={`w-4 h-4 text-gray-500 group-hover:text-white transition-all flex-shrink-0 ${showWorkspaceMenu ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
-          {/* Workspace Menu */}
+          {/* Workspace Dropdown */}
           {showWorkspaceMenu && (
-            <div className="absolute top-full left-0 w-full mt-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-xl z-50 overflow-hidden">
-              <div className="max-h-60 overflow-y-auto">
-                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Switch Workspace</div>
+            <div className="absolute top-full left-0 w-full mt-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-2xl z-50 overflow-hidden">
+              <div className="max-h-56 overflow-y-auto">
+                <div className="px-4 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  Switch Workspace
+                </div>
                 {workspaces.map(ws => (
                   <button
                     key={ws._id}
                     onClick={() => handleSwitchWorkspace(ws)}
-                    className={`w-full text-left px-4 py-3 hover:bg-[#2a2a2a] transition-colors flex items-center justify-between ${currentWorkspace?._id === ws._id ? 'text-primary' : 'text-gray-300'}`}
+                    className={`w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] transition-colors flex items-center gap-3 ${currentWorkspace?._id === ws._id ? 'text-primary' : 'text-gray-300'}`}
                   >
-                    <span className="truncate">{ws.name}</span>
+                    <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary/40 to-secondary/40 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      {ws.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm truncate flex-1">{ws.name}</span>
                     {currentWorkspace?._id === ws._id && (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                     )}
                   </button>
                 ))}
               </div>
-              <div className="border-t border-[#2a2a2a] p-2 space-y-1">
-                <button
-                  onClick={() => { setShowInviteModal(true); setShowWorkspaceMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white rounded-md flex items-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Invite Members
-                </button>
-                <button
-                  onClick={() => { setShowCreateWorkspaceModal(true); setShowWorkspaceMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white rounded-md flex items-center gap-2"
-                >
-                  <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">+</div>
-                  Create Workspace
-                </button>
-                <button
-                  onClick={() => { setShowJoinWorkspaceModal(true); setShowWorkspaceMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white rounded-md flex items-center gap-2"
-                >
-                  <div className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center">#</div>
-                  Join Workspace
-                </button>
+              <div className="border-t border-[#2a2a2a] p-2 space-y-0.5">
+                {[
+                  { icon: 'M12 4v16m8-8H4', label: 'Invite Members', action: () => { setShowInviteModal(true); setShowWorkspaceMenu(false); } },
+                  { icon: 'M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z', label: 'Create Workspace', action: () => { setShowCreateWorkspaceModal(true); setShowWorkspaceMenu(false); } },
+                  { icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1', label: 'Join Workspace', action: () => { setShowJoinWorkspaceModal(true); setShowWorkspaceMenu(false); } },
+                ].map(({ icon, label, action }) => (
+                  <button key={label} onClick={action}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-[#2a2a2a] hover:text-white rounded-lg flex items-center gap-2.5 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+                    </svg>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* Channels Section */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-400">Channels</h3>
+        {/* ── Scrollable Nav ── */}
+        <div className="flex-1 overflow-y-auto py-3 space-y-5">
+
+          {/* ── Channels Section ── */}
+          <div className="px-3">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">Channels</span>
               <button
                 onClick={() => setShowCreateChannel(true)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white hover:bg-[#2a2a2a] rounded transition-colors"
+                title="Create channel"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {channels.map(channel => {
                 const isAdmin = channel.admins?.some((adminId: any) => {
                   const aid = typeof adminId === 'object' ? adminId._id : adminId;
-                  const uid = currentUser?._id || currentUser?.id;
-                  return aid === uid;
+                  return aid === (currentUser?._id || currentUser?.id);
                 });
+                const isActive = activeChannel?._id === channel._id;
                 const hasUnread = unreadChannels.has(channel._id);
 
                 return (
@@ -1070,131 +1114,202 @@ const Dashboard = () => {
                       setContextMenuPos({ x: e.clientX, y: e.clientY });
                       setShowChannelContextMenu(true);
                     }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${activeChannel?._id === channel._id
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
-                      }`}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-all group ${
+                      isActive
+                        ? 'bg-primary/15 text-white'
+                        : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-gray-200'
+                    }`}
                   >
-                    <span className="text-lg">{channel.isPrivate ? '🔒' : '#'}</span>
-                    <span className={`text-sm font-medium truncate flex-1 ${hasUnread ? 'font-bold text-white' : ''}`}>{channel.name}</span>
-                    {hasUnread && (
-                      <span className="w-2 h-2 bg-primary rounded-full"></span>
-                    )}
-                    {isAdmin && activeChannel?._id !== channel._id && (
-                      <span className="text-xs px-1.5 py-0.5 bg-primary/20 text-primary rounded">Admin</span>
-                    )}
+                    <span className={`text-sm font-medium flex-shrink-0 ${isActive ? 'text-primary' : 'text-gray-500'}`}>
+                      {channel.isPrivate ? '🔒' : '#'}
+                    </span>
+                    <span className={`text-sm truncate flex-1 ${hasUnread ? 'font-semibold text-white' : isActive ? 'font-medium' : ''}`}>
+                      {channel.name}
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {hasUnread && !isActive && (
+                        <span className="w-2 h-2 bg-primary rounded-full"></span>
+                      )}
+                      {isAdmin && (
+                        <span className="text-[9px] px-1 py-0.5 bg-primary/20 text-primary rounded font-medium hidden group-hover:inline">
+                          Admin
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Direct Messages with Search */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-400">Direct Messages</h3>
+          {/* ── Divider ── */}
+          <div className="mx-3 border-t border-[#1f1f1f]" />
+
+          {/* ── Direct Messages Section ── */}
+          <div className="px-3">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">Direct Messages</span>
               <button
                 onClick={() => setShowUserSearch(!showUserSearch)}
-                className="text-gray-400 hover:text-white transition-colors"
-                title="Search users to message"
+                className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white hover:bg-[#2a2a2a] rounded transition-colors"
+                title="New direct message"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
             </div>
 
-            {/* User Search Input */}
+            {/* DM Search Input */}
             {showUserSearch && (
-              <div className="mb-3">
-                <input
-                  type="text"
-                  placeholder="Search members..."
-                  value={userSearchQuery}
-                  onChange={(e) => setUserSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] text-white text-sm rounded-lg border border-[#2a2a2a] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  autoFocus
-                />
+              <div className="mb-2">
+                <div className="relative">
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Find a member..."
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-[#1e1e1e] text-white text-xs rounded-lg border border-[#2a2a2a] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 placeholder-gray-600"
+                    autoFocus
+                  />
+                </div>
               </div>
             )}
-            <button
-              onClick={() => setShowSearchModal(true)}
-              className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors text-gray-400 hover:text-white"
-              title="Search"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
+
             {/* DM List */}
-            <div className="space-y-1">
-              {(showUserSearch && userSearchQuery ? filteredMembers : dmConversations.slice(0, 8)).map((item: any) => {
-                const user = item.userId || item;
-                // Skip if user is current user
-                const isCurrentUserCheck = (user._id === currentUser?._id) || (user.id === currentUser?.id);
-                if (isCurrentUserCheck) return null;
+            <div className="space-y-0.5">
+              {(showUserSearch && userSearchQuery ? filteredMembers : (() => {
+                // ── FIX: Build DM list from dmConversations properly ──
+                // Each conversation has a `participants` array; find the other user
+                const seen = new Set<string>();
+                const items: { user: User; conversation?: any }[] = [];
+
+                dmConversations.forEach((conv: any) => {
+                  // Try participants array first (populated)
+                  if (conv.participants && Array.isArray(conv.participants)) {
+                    const other = conv.participants.find((p: any) => {
+                      const pid = p._id || p.id;
+                      return pid !== currentUser?._id && pid !== currentUser?.id;
+                    });
+                    if (other && (other._id || other.id)) {
+                      const uid = other._id || other.id;
+                      if (!seen.has(uid)) {
+                        seen.add(uid);
+                        items.push({ user: other, conversation: conv });
+                      }
+                    }
+                  }
+                  // Fallback: item itself is a user object (from workspaceMembers shape)
+                  else if (conv.userId || conv.fullName) {
+                    const u = conv.userId || conv;
+                    const uid = u._id || u.id;
+                    if (uid && uid !== currentUser?._id && uid !== currentUser?.id && !seen.has(uid)) {
+                      seen.add(uid);
+                      items.push({ user: u, conversation: conv });
+                    }
+                  }
+                });
+                return items.slice(0, 10);
+              })()).map((item: any) => {
+                // Handle both shapes: raw user OR { user, conversation } object
+                const user: User = item.user || item;
+                const uid = user._id || user.id || '';
+                if (!uid) return null;
+                if (uid === currentUser?._id || uid === currentUser?.id) return null;
+
+                const isActive = activeDMUser?._id === uid || activeDMUser?.id === uid;
+                const unreadCount = unreadDMs.get(uid) || 0;
+
+                // Match status from workspaceMembers (which has live status updates)
+                const liveMember = workspaceMembers.find(m => m._id === uid || m.id === uid);
+                const isOnline = (liveMember?.status || user.status) === 'online';
+                const displayName = user.fullName || user.name || 'Unknown';
+                const initials = getInitials(displayName);
+
                 return (
                   <button
-                    key={user._id || user.id}
+                    key={uid}
                     onClick={() => handleSelectDMUser(user)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${(activeDMUser?._id === user._id || activeDMUser?.id === user.id)
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
-                      }`}
+                    className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left transition-all group ${
+                      isActive
+                        ? 'bg-primary/15 text-white'
+                        : 'text-gray-400 hover:bg-[#1e1e1e] hover:text-gray-200'
+                    }`}
                   >
+                    {/* Avatar with online dot */}
                     <div className="relative flex-shrink-0">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-white font-semibold text-xs">
-                        {getInitials(user.fullName)}
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white font-semibold text-xs ${
+                        isActive ? 'bg-gradient-to-br from-primary to-secondary' : 'bg-gradient-to-br from-primary/30 to-secondary/30'
+                      }`}>
+                        {initials}
                       </div>
-                      {user.status === 'online' && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-[#141414] rounded-full"></div>
-                      )}
+                      {/* Online indicator */}
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#141414] ${
+                        isOnline ? 'bg-green-500' : 'bg-gray-600'
+                      }`} />
                     </div>
-                    <span className="text-sm font-medium truncate flex-1">{user.fullName}</span>
-                    {unreadDMs.get(user._id || user.id) ? (
-                      <span className="flex items-center justify-center w-6 h-6 bg-primary text-white text-xs font-bold rounded-full">
-                        {Math.min(unreadDMs.get(user._id || user.id) || 0, 9)}
+
+                    <span className={`text-sm truncate flex-1 ${unreadCount > 0 ? 'font-semibold text-white' : ''}`}>
+                      {displayName}
+                    </span>
+
+                    {unreadCount > 0 && (
+                      <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                        {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
-                    ) : null}
+                    )}
                   </button>
                 );
               })}
             </div>
 
             {showUserSearch && userSearchQuery && filteredMembers.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-4">No members found</p>
+              <p className="text-xs text-gray-600 text-center py-3">No members found</p>
             )}
           </div>
         </div>
 
-        {/* User Profile */}
-        <div className="p-4 border-t border-[#1f1f1f]">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold flex-shrink-0">
-              {currentUser ? getInitials(currentUser.fullName) : '?'}
+        {/* ── User Profile Footer ── */}
+        <div className="px-3 py-3 border-t border-[#1f1f1f] bg-[#111111]">
+          <div className="flex items-center gap-2.5">
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-xs">
+                {currentUser ? getInitials(currentUser.fullName) : '?'}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#111111] bg-green-500" />
             </div>
+
+            {/* Name + email */}
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{currentUser?.fullName}</p>
-              <p className="text-xs text-gray-500 truncate">{currentUser?.email}</p>
+              <p className="text-sm font-semibold text-white truncate leading-tight">{currentUser?.fullName}</p>
+              <p className="text-[10px] text-gray-500 truncate leading-tight">{currentUser?.email}</p>
             </div>
+
+            {/* Logout icon button */}
+            <button
+              onClick={handleLogout}
+              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Sign out"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Logout
-          </button>
         </div>
+
       </aside>
 
+
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col overflow-x-hidden">
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto flex flex-col">
+       <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col">
           {/* Channel Header - ONLY ONE */}
           {activeChannel && !showDM && (
             <ChannelHeader
@@ -1281,7 +1396,7 @@ const Dashboard = () => {
                 </div>
               </div>
             ) : (
-              messages.map((message) => {
+              [...new Map(messages.map(m => [m._id, m])).values()].map((message) => {
                 if (!currentUser) return null;
 
                 if (showDM && activeDMUser) {

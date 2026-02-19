@@ -10,7 +10,6 @@ export interface User {
 }
 
 export type CallType = 'voice' | 'video';
-
 export type CallStatus = 'ringing' | 'ongoing' | 'ended' | 'missed' | 'declined';
 
 export interface Call {
@@ -39,6 +38,7 @@ export interface CallState {
   isRinging: boolean;
   isMuted: boolean;
   isVideoEnabled: boolean;
+  isScreenSharing: boolean;        // ✅ NEW
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isConnected: boolean;
@@ -49,15 +49,16 @@ export interface CallContextType extends CallState {
   initiateCall: (receiverId: string, callType: CallType) => Promise<void>;
   acceptCall: () => Promise<void>;
   declineCall: () => void;
-  endCall: () => void;         // ✅ not async — no await needed
-  cancelCall: () => void;      // ✅ NEW: for caller cancelling before answer
+  endCall: () => void;
+  cancelCall: () => void;
   toggleMute: () => void;
   toggleVideo: () => void;
+  startScreenShare: () => Promise<void>;   // ✅ NEW
+  stopScreenShare: () => Promise<void>;    // ✅ NEW
   connectionState: string;
   mediaError: string | null;
 }
 
-// ─── WebRTC Types ────────────────────────────────────────────
 export interface WebRTCOffer {
   targetUserId: string;
   offer: RTCSessionDescriptionInit;
@@ -76,25 +77,18 @@ export interface WebRTCIceCandidate {
   callId: string;
 }
 
-// ─── Component Props ─────────────────────────────────────────
-
-export interface CallTimerProps {
-  startTime: Date;
-}
-
+export interface CallTimerProps { startTime: Date; }
 export interface CallControlsProps {
   isMuted: boolean;
   onToggleMute: () => void;
   onEndCall: () => void;
 }
-
 export interface CallButtonProps {
   userId: string;
   userName: string;
   callType: CallType;
   disabled?: boolean;
 }
-
 export interface IncomingCallModalProps {
   caller: User;
   callType: CallType;
@@ -102,13 +96,15 @@ export interface IncomingCallModalProps {
   onDecline: () => void;
 }
 
-// ✅ FIXED: Props now match what CallManager actually passes
 export interface VoiceCallModalProps {
   call: Call;
   isMuted: boolean;
-  duration: number;           // seconds from callDuration
-  isConnected: boolean;       // true when remoteStream exists
+  duration: number;
+  isConnected: boolean;
+  isScreenSharing: boolean;          // ✅ NEW
   onToggleMute: () => void;
+  onStartScreenShare: () => Promise<void>;  // ✅ NEW
+  onStopScreenShare: () => Promise<void>;   // ✅ NEW
   onEndCall: () => void;
 }
 
@@ -120,12 +116,13 @@ export interface VideoCallModalProps {
   duration: number;
   isConnected?: boolean;
   isVideoEnabled?: boolean;
+  isScreenSharing: boolean;          // ✅ NEW
   onToggleMute: () => void;
   onToggleVideo?: () => void;
+  onStartScreenShare: () => Promise<void>;  // ✅ NEW
+  onStopScreenShare: () => Promise<void>;   // ✅ NEW
   onEndCall: () => void;
 }
-
-// ─── Group Call Types ─────────────────────────────────────────
 
 export interface GroupCallParticipant {
   userId: string;
@@ -150,11 +147,7 @@ export interface IncomingGroupCall {
   channelId: string;
   callId: string;
   callType: CallType;
-  startedBy: {
-    userId: string;
-    name: string;
-    avatar?: string | null;
-  };
+  startedBy: { userId: string; name: string; avatar?: string | null; };
 }
 
 export interface GroupCallContextType {
