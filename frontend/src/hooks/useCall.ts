@@ -15,70 +15,46 @@ interface UseCallProps {
 // Uses Metered.ca free tier. Set VITE_METERED_API_KEY in your .env
 // Get key at: https://dashboard.metered.ca → Apps → Your App → TURN credentials
 const getIceServers = () => {
-  const key = import.meta.env.VITE_METERED_API_KEY;
-  if (key) {
-    return {
-      iceServers: [
-        { urls: 'stun:stun.relay.metered.ca:80' },
-        {
-          urls: 'turn:standard.relay.metered.ca:80',
-          username: key,
-          credential: key,
-        },
-        {
-          urls: 'turn:standard.relay.metered.ca:80?transport=tcp',
-          username: key,
-          credential: key,
-        },
-        {
-          urls: 'turn:standard.relay.metered.ca:443',
-          username: key,
-          credential: key,
-        },
-        {
-          urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
-          username: key,
-          credential: key,
-        },
-      ],
-      iceCandidatePoolSize: 10,
-    };
-  }
   return {
     iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:syncspaceapplication.metered.live:80', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:80?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:443', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turns:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
     ],
+    iceCandidatePoolSize: 10,
   };
 };
 
 export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): CallContextType => {
-  const [activeCall, setActiveCall]           = useState<Call | null>(null);
-  const [incomingCall, setIncomingCall]       = useState<IncomingCall | null>(null);
-  const [isMuted, setIsMuted]                 = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled]   = useState(true);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [localStream, setLocalStream]         = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream]       = useState<MediaStream | null>(null);
-  const [callDuration, setCallDuration]       = useState(0);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
   const [connectionState, setConnectionState] = useState<string>('disconnected');
-  const [mediaError, setMediaError]           = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
-  const pcRef             = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef    = useRef<MediaStream | null>(null);
-  const screenStreamRef   = useRef<MediaStream | null>(null);
-  const cameraTrackRef    = useRef<MediaStreamTrack | null>(null);
-  const activeCallIdRef   = useRef<string | null>(null);
-  const timerRef          = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
+  const activeCallIdRef = useRef<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
-  const isInitiatorRef    = useRef<boolean>(false);
-  const targetUserIdRef   = useRef<string | null>(null);
+  const isInitiatorRef = useRef<boolean>(false);
+  const targetUserIdRef = useRef<string | null>(null);
   const isVideoEnabledRef = useRef<boolean>(true);
-  const callTypeRef       = useRef<CallType>('voice');
+  const callTypeRef = useRef<CallType>('voice');
 
   const isCallActive = !!activeCall;
-  const isRinging    = !!incomingCall;
-  const isConnected  = connectionState === 'connected' || !!remoteStream;
+  const isRinging = !!incomingCall;
+  const isConnected = connectionState === 'connected' || !!remoteStream;
 
   // ── Cleanup ──────────────────────────────────────────────────────────────
   const cleanupCall = useCallback(() => {
@@ -93,9 +69,9 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
     pcRef.current = null;
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     iceCandidateQueue.current = [];
-    activeCallIdRef.current   = null;
-    isInitiatorRef.current    = false;
-    targetUserIdRef.current   = null;
+    activeCallIdRef.current = null;
+    isInitiatorRef.current = false;
+    targetUserIdRef.current = null;
     isVideoEnabledRef.current = true;
     setCallDuration(0);
     setConnectionState('disconnected');
@@ -309,8 +285,8 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       socket.emit('webrtc:offer', { targetUserId: receiverId, offer, callId: call._id });
     };
 
-    const onDeclined  = () => { setIncomingCall(null); setActiveCall(null); cleanupCall(); };
-    const onEnded     = () => { setIncomingCall(null); setActiveCall(null); cleanupCall(); };
+    const onDeclined = () => { setIncomingCall(null); setActiveCall(null); cleanupCall(); };
+    const onEnded = () => { setIncomingCall(null); setActiveCall(null); cleanupCall(); };
     const onCancelled = () => { setIncomingCall(null); cleanupCall(); };
 
     const onOffer = async (data: { offer: RTCSessionDescriptionInit; callId: string; senderId: string }) => {
@@ -344,26 +320,26 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       }
     };
 
-    socket.on('call:initiated',            onInitiated);
-    socket.on('call:incoming',             onIncoming);
-    socket.on('call:accepted',             onAccepted);
-    socket.on('call:declined',             onDeclined);
-    socket.on('call:ended',                onEnded);
-    socket.on('call:cancelled',            onCancelled);
-    socket.on('webrtc:offer',              onOffer);
-    socket.on('webrtc:answer',             onAnswer);
-    socket.on('webrtc:ice-candidate',      onIceCandidate);
+    socket.on('call:initiated', onInitiated);
+    socket.on('call:incoming', onIncoming);
+    socket.on('call:accepted', onAccepted);
+    socket.on('call:declined', onDeclined);
+    socket.on('call:ended', onEnded);
+    socket.on('call:cancelled', onCancelled);
+    socket.on('webrtc:offer', onOffer);
+    socket.on('webrtc:answer', onAnswer);
+    socket.on('webrtc:ice-candidate', onIceCandidate);
 
     return () => {
-      socket.off('call:initiated',         onInitiated);
-      socket.off('call:incoming',          onIncoming);
-      socket.off('call:accepted',          onAccepted);
-      socket.off('call:declined',          onDeclined);
-      socket.off('call:ended',             onEnded);
-      socket.off('call:cancelled',         onCancelled);
-      socket.off('webrtc:offer',           onOffer);
-      socket.off('webrtc:answer',          onAnswer);
-      socket.off('webrtc:ice-candidate',   onIceCandidate);
+      socket.off('call:initiated', onInitiated);
+      socket.off('call:incoming', onIncoming);
+      socket.off('call:accepted', onAccepted);
+      socket.off('call:declined', onDeclined);
+      socket.off('call:ended', onEnded);
+      socket.off('call:cancelled', onCancelled);
+      socket.off('webrtc:offer', onOffer);
+      socket.off('webrtc:answer', onAnswer);
+      socket.off('webrtc:ice-candidate', onIceCandidate);
     };
   }, [socket, getOrCreatePC, addLocalTracksToPc, drainIceCandidateQueue, cleanupCall, startTimer]);
 

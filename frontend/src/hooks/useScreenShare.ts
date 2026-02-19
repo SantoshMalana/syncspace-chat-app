@@ -18,35 +18,39 @@ interface UseScreenShareProps {
   workspaceId: string;
 }
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'turn:openrelay.metered.ca:80',                username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443',               username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  ],
+const getIceServers = () => {
+  return {
+    iceServers: [
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:syncspaceapplication.metered.live:80', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:80?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:443', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turns:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+    ],
+    iceCandidatePoolSize: 10,
+  };
 };
 
 export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreenShareProps) => {
-  const [isHosting, setIsHosting]           = useState(false);
-  const [isViewing, setIsViewing]           = useState(false);
-  const [activeRoom, setActiveRoom]         = useState<ScreenShareRoom | null>(null);
+  const [isHosting, setIsHosting] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
+  const [activeRoom, setActiveRoom] = useState<ScreenShareRoom | null>(null);
   const [availableRooms, setAvailableRooms] = useState<ScreenShareRoom[]>([]);
-  const [localStream, setLocalStream]       = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream]     = useState<MediaStream | null>(null);
-  const [viewerCount, setViewerCount]       = useState(0);
-  const [error, setError]                   = useState<string | null>(null);
-  const [chatMessages, setChatMessages]     = useState<{ userId: string; name: string; text: string; time: number }[]>([]);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<{ userId: string; name: string; text: string; time: number }[]>([]);
 
   // Refs — always current, safe to use inside socket callbacks
-  const viewerPCsRef       = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const viewerPCRef        = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef     = useRef<MediaStream | null>(null);
-  const activeRoomRef      = useRef<ScreenShareRoom | null>(null);
-  const isHostingRef       = useRef(false);
-  const isViewingRef       = useRef(false);
-  const pendingRoomIdRef   = useRef<string | null>(null); // roomId we're joining, before server confirms
+  const viewerPCsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const viewerPCRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const activeRoomRef = useRef<ScreenShareRoom | null>(null);
+  const isHostingRef = useRef(false);
+  const isViewingRef = useRef(false);
+  const pendingRoomIdRef = useRef<string | null>(null); // roomId we're joining, before server confirms
   const iceCandidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
   // Keep refs in sync
@@ -120,7 +124,7 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
   const createViewerPC = useCallback((viewerId: string, roomId: string): RTCPeerConnection => {
     if (viewerPCsRef.current.has(viewerId)) return viewerPCsRef.current.get(viewerId)!;
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(getIceServers());
     viewerPCsRef.current.set(viewerId, pc);
     iceCandidateQueues.current.set(viewerId, []);
 
@@ -147,7 +151,7 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
   // ─── Drain ICE queue ─────────────────────────────────────────────────────
   const drainIce = async (pc: RTCPeerConnection, peerId: string) => {
     const queue = iceCandidateQueues.current.get(peerId) || [];
-    for (const c of queue) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} }
+    for (const c of queue) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch { } }
     iceCandidateQueues.current.set(peerId, []);
   };
 
@@ -213,7 +217,7 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
     const onOffer = async (data: { offer: RTCSessionDescriptionInit; roomId: string; hostId: string }) => {
       console.log('📥 Received offer from host, creating answer...');
       try {
-        const pc = new RTCPeerConnection(ICE_SERVERS);
+        const pc = new RTCPeerConnection(getIceServers());
         viewerPCRef.current = pc;
 
         pc.ontrack = (e) => {
@@ -271,7 +275,7 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
       }
 
       if (pc.remoteDescription) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch { }
       } else {
         const q = iceCandidateQueues.current.get(data.senderId) || [];
         q.push(data.candidate);
@@ -305,34 +309,34 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
       }
     };
 
-    socket.on('screenshare:started',       onStarted);
-    socket.on('screenshare:joined',        onJoined);
+    socket.on('screenshare:started', onStarted);
+    socket.on('screenshare:joined', onJoined);
     socket.on('screenshare:viewer-joined', onViewerJoined);
-    socket.on('screenshare:offer',         onOffer);
-    socket.on('screenshare:answer',        onAnswer);
-    socket.on('screenshare:ice',           onIce);
-    socket.on('screenshare:viewer-count',  onViewerCount);
-    socket.on('screenshare:ended',         onEnded);
-    socket.on('screenshare:available',     onAvailable);
-    socket.on('screenshare:unavailable',   onUnavailable);
-    socket.on('screenshare:list',          onList);
-    socket.on('screenshare:chat',          onChat);
+    socket.on('screenshare:offer', onOffer);
+    socket.on('screenshare:answer', onAnswer);
+    socket.on('screenshare:ice', onIce);
+    socket.on('screenshare:viewer-count', onViewerCount);
+    socket.on('screenshare:ended', onEnded);
+    socket.on('screenshare:available', onAvailable);
+    socket.on('screenshare:unavailable', onUnavailable);
+    socket.on('screenshare:list', onList);
+    socket.on('screenshare:chat', onChat);
 
     refreshRooms();
 
     return () => {
-      socket.off('screenshare:started',       onStarted);
-      socket.off('screenshare:joined',        onJoined);
+      socket.off('screenshare:started', onStarted);
+      socket.off('screenshare:joined', onJoined);
       socket.off('screenshare:viewer-joined', onViewerJoined);
-      socket.off('screenshare:offer',         onOffer);
-      socket.off('screenshare:answer',        onAnswer);
-      socket.off('screenshare:ice',           onIce);
-      socket.off('screenshare:viewer-count',  onViewerCount);
-      socket.off('screenshare:ended',         onEnded);
-      socket.off('screenshare:available',     onAvailable);
-      socket.off('screenshare:unavailable',   onUnavailable);
-      socket.off('screenshare:list',          onList);
-      socket.off('screenshare:chat',          onChat);
+      socket.off('screenshare:offer', onOffer);
+      socket.off('screenshare:answer', onAnswer);
+      socket.off('screenshare:ice', onIce);
+      socket.off('screenshare:viewer-count', onViewerCount);
+      socket.off('screenshare:ended', onEnded);
+      socket.off('screenshare:available', onAvailable);
+      socket.off('screenshare:unavailable', onUnavailable);
+      socket.off('screenshare:list', onList);
+      socket.off('screenshare:chat', onChat);
     };
   }, [socket, currentUserId, workspaceId, createViewerPC, cleanup, refreshRooms]);
 

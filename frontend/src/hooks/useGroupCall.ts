@@ -16,61 +16,37 @@ interface UseGroupCallProps {
 }
 
 const getIceServers = () => {
-  const key = import.meta.env.VITE_METERED_API_KEY;
-  if (key) {
-    return {
-      iceServers: [
-        { urls: 'stun:stun.relay.metered.ca:80' },
-        {
-          urls: 'turn:standard.relay.metered.ca:80',
-          username: key,
-          credential: key,
-        },
-        {
-          urls: 'turn:standard.relay.metered.ca:80?transport=tcp',
-          username: key,
-          credential: key,
-        },
-        {
-          urls: 'turn:standard.relay.metered.ca:443',
-          username: key,
-          credential: key,
-        },
-        {
-          urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
-          username: key,
-          credential: key,
-        },
-      ],
-      iceCandidatePoolSize: 10,
-    };
-  }
   return {
     iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: 'turn:syncspaceapplication.metered.live:80', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:80?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:443', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turn:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
+      { urls: 'turns:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
     ],
+    iceCandidatePoolSize: 10,
   };
 };
 
 export const useGroupCall = ({
   socket, currentUserId, currentUserName, currentUserAvatar,
 }: UseGroupCallProps): GroupCallContextType => {
-  const [groupCall, setGroupCall]                 = useState<GroupCallState | null>(null);
+  const [groupCall, setGroupCall] = useState<GroupCallState | null>(null);
   const [incomingGroupCall, setIncomingGroupCall] = useState<IncomingGroupCall | null>(null);
-  const [localStream, setLocalStream]             = useState<MediaStream | null>(null);
-  const [isMuted, setIsMuted]                     = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled]       = useState(true);
-  const [isScreenSharing, setIsScreenSharing]     = useState(false);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
 
-  const peersRef           = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const remoteStreamsRef   = useRef<Map<string, MediaStream>>(new Map());
-  const localStreamRef     = useRef<MediaStream | null>(null);
-  const screenStreamRef    = useRef<MediaStream | null>(null);
-  const cameraTrackRef     = useRef<MediaStreamTrack | null>(null);
+  const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const iceCandidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
-  const groupCallRef       = useRef<GroupCallState | null>(null);
-  const callTypeRef        = useRef<CallType>('voice');
+  const groupCallRef = useRef<GroupCallState | null>(null);
+  const callTypeRef = useRef<CallType>('voice');
 
   useEffect(() => { groupCallRef.current = groupCall; }, [groupCall]);
 
@@ -160,7 +136,7 @@ export const useGroupCall = ({
   const drainIceQueue = async (pc: RTCPeerConnection, peerId: string) => {
     const queue = iceCandidateQueues.current.get(peerId) || [];
     for (const c of queue) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch { }
     }
     iceCandidateQueues.current.set(peerId, []);
   };
@@ -311,7 +287,7 @@ export const useGroupCall = ({
         return;
       }
       if (pc.remoteDescription) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch { }
       } else {
         const q = iceCandidateQueues.current.get(data.senderId) || [];
         q.push(data.candidate);
@@ -332,28 +308,28 @@ export const useGroupCall = ({
     const onCallEnded = () => { cleanupCall(); setIncomingGroupCall(null); };
     const onAlreadyActive = (data: IncomingGroupCall) => setIncomingGroupCall(data);
 
-    socket.on('group-call:incoming',             onIncoming);
-    socket.on('group-call:started',              onStarted);
-    socket.on('group-call:joined',               onJoined);
-    socket.on('group-call:peer-joined',          onPeerJoined);
-    socket.on('group-call:offer',                onOffer);
-    socket.on('group-call:answer',               onAnswer);
-    socket.on('group-call:ice',                  onIce);
-    socket.on('group-call:peer-left',            onPeerLeft);
-    socket.on('group-call:ended',                onCallEnded);
-    socket.on('group-call:already-active',       onAlreadyActive);
+    socket.on('group-call:incoming', onIncoming);
+    socket.on('group-call:started', onStarted);
+    socket.on('group-call:joined', onJoined);
+    socket.on('group-call:peer-joined', onPeerJoined);
+    socket.on('group-call:offer', onOffer);
+    socket.on('group-call:answer', onAnswer);
+    socket.on('group-call:ice', onIce);
+    socket.on('group-call:peer-left', onPeerLeft);
+    socket.on('group-call:ended', onCallEnded);
+    socket.on('group-call:already-active', onAlreadyActive);
 
     return () => {
-      socket.off('group-call:incoming',          onIncoming);
-      socket.off('group-call:started',           onStarted);
-      socket.off('group-call:joined',            onJoined);
-      socket.off('group-call:peer-joined',       onPeerJoined);
-      socket.off('group-call:offer',             onOffer);
-      socket.off('group-call:answer',            onAnswer);
-      socket.off('group-call:ice',               onIce);
-      socket.off('group-call:peer-left',         onPeerLeft);
-      socket.off('group-call:ended',             onCallEnded);
-      socket.off('group-call:already-active',    onAlreadyActive);
+      socket.off('group-call:incoming', onIncoming);
+      socket.off('group-call:started', onStarted);
+      socket.off('group-call:joined', onJoined);
+      socket.off('group-call:peer-joined', onPeerJoined);
+      socket.off('group-call:offer', onOffer);
+      socket.off('group-call:answer', onAnswer);
+      socket.off('group-call:ice', onIce);
+      socket.off('group-call:peer-left', onPeerLeft);
+      socket.off('group-call:ended', onCallEnded);
+      socket.off('group-call:already-active', onAlreadyActive);
     };
   }, [socket, currentUserId, currentUserName, currentUserAvatar, createPeerConnection, cleanupCall]);
 
