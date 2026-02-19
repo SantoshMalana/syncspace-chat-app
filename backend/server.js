@@ -150,6 +150,7 @@ const userRoutes = require('./routes/userRoutes');
 // ⭐ NEW: Call and Meeting routes
 const meetingRoutes = require('./routes/meetingRoutes');
 const callRoutes = require('./routes/callRoutes');
+const screenShareHandlers = require('./socket/screenShareHandlers');
 
 // Apply rate limiting
 app.use('/api/auth/login', authLimiter);
@@ -275,12 +276,20 @@ io.on('connection', (socket) => {
   // ⭐ NEW: Initialize group call handlers
   groupCallHandlers(io, socket);
 
+  // ⭐ Screen share handlers
+  screenShareHandlers(io, socket);
+
   // User joins a workspace room
   socket.on('workspace:join', (workspaceId) => {
     socket.join(`workspace:${workspaceId}`);
     console.log(`User joined workspace: ${workspaceId}`);
   });
 
+  socket.on('screenshare:chat', ({ roomId, text }) => {
+    socket.to(`screenshare:${roomId}`).emit('screenshare:chat', {
+      userId: socket.user.id, name: socket.user.fullName, text, time: Date.now(),
+    });
+  });
   // User joins a channel room
   socket.on('channel:join', (channelId) => {
     socket.join(`channel:${channelId}`);
