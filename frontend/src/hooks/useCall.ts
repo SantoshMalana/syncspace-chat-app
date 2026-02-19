@@ -1,7 +1,5 @@
 // frontend/src/hooks/useCall.ts
-// Added: startScreenShare(), stopScreenShare(), isScreenSharing state
-// Screen share replaces video track in PC via replaceTrack() — no renegotiation needed
-// When user stops via browser's native "Stop sharing" bar, auto-reverts to camera
+// Fixed: Proper TURN server via env var, keep-alive ICE restart on disconnect
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
@@ -13,46 +11,76 @@ interface UseCallProps {
   workspaceId: string;
 }
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'turn:openrelay.metered.ca:80',       username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443',      username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  ],
+// ── ICE config ────────────────────────────────────────────────────────────────
+// Uses Metered.ca free tier. Set VITE_METERED_API_KEY in your .env
+// Get key at: https://dashboard.metered.ca → Apps → Your App → TURN credentials
+const getIceServers = () => {
+  const key = import.meta.env.VITE_METERED_API_KEY;
+  if (key) {
+    return {
+      iceServers: [
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        {
+          urls: 'turn:standard.relay.metered.ca:80',
+          username: key,
+          credential: key,
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:80?transport=tcp',
+          username: key,
+          credential: key,
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:443',
+          username: key,
+          credential: key,
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+          username: key,
+          credential: key,
+        },
+      ],
+      iceCandidatePoolSize: 10,
+    };
+  }
+  return {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
+  };
 };
 
 export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): CallContextType => {
-  const [activeCall, setActiveCall]         = useState<Call | null>(null);
-  const [incomingCall, setIncomingCall]     = useState<IncomingCall | null>(null);
-  const [isMuted, setIsMuted]               = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);  // ✅ NEW
-  const [localStream, setLocalStream]       = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream]     = useState<MediaStream | null>(null);
-  const [callDuration, setCallDuration]     = useState(0);
+  const [activeCall, setActiveCall]           = useState<Call | null>(null);
+  const [incomingCall, setIncomingCall]       = useState<IncomingCall | null>(null);
+  const [isMuted, setIsMuted]                 = useState(false);
+  const [isVideoEnabled, setIsVideoEnabled]   = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [localStream, setLocalStream]         = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream]       = useState<MediaStream | null>(null);
+  const [callDuration, setCallDuration]       = useState(0);
   const [connectionState, setConnectionState] = useState<string>('disconnected');
-  const [mediaError, setMediaError]         = useState<string | null>(null);
+  const [mediaError, setMediaError]           = useState<string | null>(null);
 
-  const pcRef              = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef     = useRef<MediaStream | null>(null);
-  const screenStreamRef    = useRef<MediaStream | null>(null);  // ✅ NEW: screen capture stream
-  const cameraTrackRef     = useRef<MediaStreamTrack | null>(null); // ✅ NEW: saved camera track
-  const activeCallIdRef    = useRef<string | null>(null);
-  const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
-  const iceCandidateQueue  = useRef<RTCIceCandidateInit[]>([]);
-  const isInitiatorRef     = useRef<boolean>(false);
-  const targetUserIdRef    = useRef<string | null>(null);
-  const isVideoEnabledRef  = useRef<boolean>(true);
-  const callTypeRef        = useRef<CallType>('voice');
+  const pcRef             = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef    = useRef<MediaStream | null>(null);
+  const screenStreamRef   = useRef<MediaStream | null>(null);
+  const cameraTrackRef    = useRef<MediaStreamTrack | null>(null);
+  const activeCallIdRef   = useRef<string | null>(null);
+  const timerRef          = useRef<ReturnType<typeof setInterval> | null>(null);
+  const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
+  const isInitiatorRef    = useRef<boolean>(false);
+  const targetUserIdRef   = useRef<string | null>(null);
+  const isVideoEnabledRef = useRef<boolean>(true);
+  const callTypeRef       = useRef<CallType>('voice');
 
   const isCallActive = !!activeCall;
   const isRinging    = !!incomingCall;
   const isConnected  = connectionState === 'connected' || !!remoteStream;
 
-  // ─── Cleanup ────────────────────────────────────────────────────────────────
+  // ── Cleanup ──────────────────────────────────────────────────────────────
   const cleanupCall = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     localStreamRef.current = null;
@@ -61,18 +89,14 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
     cameraTrackRef.current = null;
     setLocalStream(null);
     setRemoteStream(null);
-
     pcRef.current?.close();
     pcRef.current = null;
-
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-
     iceCandidateQueue.current = [];
     activeCallIdRef.current   = null;
     isInitiatorRef.current    = false;
     targetUserIdRef.current   = null;
     isVideoEnabledRef.current = true;
-
     setCallDuration(0);
     setConnectionState('disconnected');
     setIsMuted(false);
@@ -91,7 +115,7 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
   const getOrCreatePC = useCallback((targetUserId: string, callId: string): RTCPeerConnection => {
     if (pcRef.current) return pcRef.current;
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(getIceServers());
     pcRef.current = pc;
     targetUserIdRef.current = targetUserId;
 
@@ -102,7 +126,7 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
     };
 
     pc.ontrack = (e) => {
-      console.log('🎥 Remote track received');
+      console.log('🎥 Remote track received:', e.track.kind);
       if (e.streams?.[0]) {
         setRemoteStream(e.streams[0]);
       } else {
@@ -115,6 +139,18 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
     pc.onconnectionstatechange = () => {
       console.log('🔌 Connection state:', pc.connectionState);
       setConnectionState(pc.connectionState);
+      // Auto-restart ICE on failure
+      if (pc.connectionState === 'failed') {
+        console.log('🔄 ICE failed — attempting restart...');
+        pc.restartIce();
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('🧊 ICE state:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') {
+        pc.restartIce();
+      }
     };
 
     return pc;
@@ -147,7 +183,6 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
           ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
           : false,
       });
-      // Save camera video track for later restoration after screen share
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) cameraTrackRef.current = videoTrack;
       localStreamRef.current = stream;
@@ -156,70 +191,47 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       return stream;
     } catch (err: any) {
       const msg = err.name === 'NotAllowedError'
-        ? 'Camera/microphone permission denied. Please allow access and try again.'
-        : `Could not access camera/microphone: ${err.message}`;
+        ? 'Camera/microphone permission denied.'
+        : `Could not access media: ${err.message}`;
       setMediaError(msg);
       throw err;
     }
   };
 
-  // ─── Screen Share ────────────────────────────────────────────────────────────
-
+  // ── Screen Share ──────────────────────────────────────────────────────────
   const startScreenShare = useCallback(async () => {
     if (isScreenSharing || !pcRef.current || !localStreamRef.current) return;
-
     try {
-      // 1. Capture the screen
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 30 } },
-        audio: false, // screen audio optional — keep call audio separate
+        video: { frameRate: { ideal: 30 } }, audio: false,
       });
-
       const screenTrack = screenStream.getVideoTracks()[0];
       if (!screenTrack) throw new Error('No screen video track');
-
       screenStreamRef.current = screenStream;
 
-      // 2. Replace video track in the RTCPeerConnection (no renegotiation!)
       const pc = pcRef.current;
       const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-
       if (videoSender) {
         await videoSender.replaceTrack(screenTrack);
-        console.log('🖥️ Screen track sent to remote peer via replaceTrack');
       } else {
-        // Voice call — no video sender exists yet; add the screen track
         pc.addTrack(screenTrack, localStreamRef.current);
-        console.log('🖥️ Screen track added to PC (was voice call)');
       }
 
-      // 3. Update local stream so our preview shows the screen
-      const localStream = localStreamRef.current;
-      const oldVideoTracks = localStream.getVideoTracks();
-      oldVideoTracks.forEach(t => localStream.removeTrack(t));
-      localStream.addTrack(screenTrack);
-      setLocalStream(new MediaStream(localStream.getTracks()));
-
+      const ls = localStreamRef.current;
+      ls.getVideoTracks().forEach(t => ls.removeTrack(t));
+      ls.addTrack(screenTrack);
+      setLocalStream(new MediaStream(ls.getTracks()));
       setIsScreenSharing(true);
       setIsVideoEnabled(true);
 
-      // 4. Notify the other person (UI label only — no WebRTC change needed)
       socket?.emit('call:screen-share-started', {
         callId: activeCallIdRef.current,
         targetUserId: targetUserIdRef.current,
       });
 
-      // 5. Auto-stop when user clicks browser's native "Stop sharing" button
-      screenTrack.onended = () => {
-        console.log('🖥️ Screen share stopped by user (native bar)');
-        stopScreenShare();
-      };
-
-      console.log('🖥️ Screen sharing started');
+      screenTrack.onended = () => stopScreenShare();
     } catch (err: any) {
-      if (err.name === 'NotAllowedError') {
-        console.log('🖥️ Screen share cancelled by user');
-      } else {
+      if (err.name !== 'NotAllowedError') {
         console.error('Screen share error:', err);
         setMediaError('Could not start screen share.');
       }
@@ -228,79 +240,55 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
 
   const stopScreenShare = useCallback(async () => {
     if (!isScreenSharing && !screenStreamRef.current) return;
-
     try {
-      // Stop the screen capture stream
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
-
       const pc = pcRef.current;
-      const localStream = localStreamRef.current;
+      const ls = localStreamRef.current;
 
       if (callTypeRef.current === 'video' && cameraTrackRef.current) {
-        // Reacquire camera if the saved track was stopped
         let cameraTrack = cameraTrackRef.current;
         if (cameraTrack.readyState === 'ended') {
-          const newStream = await navigator.mediaDevices.getUserMedia({
+          const ns = await navigator.mediaDevices.getUserMedia({
             video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
           });
-          cameraTrack = newStream.getVideoTracks()[0];
+          cameraTrack = ns.getVideoTracks()[0];
           cameraTrackRef.current = cameraTrack;
         }
-
-        // Replace back to camera in PC
         if (pc) {
           const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-          if (videoSender) {
-            await videoSender.replaceTrack(cameraTrack);
-            console.log('📹 Camera track restored via replaceTrack');
-          }
+          if (videoSender) await videoSender.replaceTrack(cameraTrack);
         }
-
-        // Update local stream preview
-        if (localStream) {
-          localStream.getVideoTracks().forEach(t => localStream.removeTrack(t));
-          localStream.addTrack(cameraTrack);
-          setLocalStream(new MediaStream(localStream.getTracks()));
+        if (ls) {
+          ls.getVideoTracks().forEach(t => ls.removeTrack(t));
+          ls.addTrack(cameraTrack);
+          setLocalStream(new MediaStream(ls.getTracks()));
         }
       } else {
-        // Voice call — remove the screen video track entirely from PC
-        if (pc && localStream) {
-          const screenSenders = pc.getSenders().filter(s => s.track?.kind === 'video');
-          screenSenders.forEach(s => pc.removeTrack(s));
-          localStream.getVideoTracks().forEach(t => {
-            t.stop();
-            localStream.removeTrack(t);
-          });
-          setLocalStream(new MediaStream(localStream.getTracks()));
+        if (pc && ls) {
+          pc.getSenders().filter(s => s.track?.kind === 'video').forEach(s => pc.removeTrack(s));
+          ls.getVideoTracks().forEach(t => { t.stop(); ls.removeTrack(t); });
+          setLocalStream(new MediaStream(ls.getTracks()));
         }
       }
-
       setIsScreenSharing(false);
-
-      // Notify the other person
       socket?.emit('call:screen-share-stopped', {
         callId: activeCallIdRef.current,
         targetUserId: targetUserIdRef.current,
       });
-
-      console.log('🖥️ Screen sharing stopped, camera restored');
     } catch (err) {
       console.error('Stop screen share error:', err);
       setIsScreenSharing(false);
     }
   }, [isScreenSharing, socket]);
 
-  // ─── Socket Events ──────────────────────────────────────────────────────────
+  // ── Socket Events ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
-    const onInitiated = (data: { callId: string }) => {
-      activeCallIdRef.current = data.callId;
-    };
+    const onInitiated = (data: { callId: string }) => { activeCallIdRef.current = data.callId; };
 
     const onIncoming = (data: IncomingCall) => {
-      console.log('📞 call:incoming from:', data.caller.name);
       if (activeCallIdRef.current) {
         socket.emit('call:busy', { callId: data.callId, callerId: data.caller.id });
         return;
@@ -310,15 +298,12 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
 
     const onAccepted = async (data: { call: Call }) => {
       const call = data.call;
-      console.log('✅ Call accepted, creating offer...');
       setActiveCall(call);
       activeCallIdRef.current = call._id;
       startTimer();
-
       const receiverId = call.receiver._id || call.receiver.id || '';
       const pc = getOrCreatePC(receiverId, call._id);
       if (localStreamRef.current) addLocalTracksToPc(pc, localStreamRef.current);
-
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('webrtc:offer', { targetUserId: receiverId, offer, callId: call._id });
@@ -328,27 +313,12 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
     const onEnded     = () => { setIncomingCall(null); setActiveCall(null); cleanupCall(); };
     const onCancelled = () => { setIncomingCall(null); cleanupCall(); };
 
-    // ✅ NEW: Remote started screen share — show label in UI
-    const onScreenShareStarted = () => {
-      console.log('🖥️ Remote peer started screen sharing');
-      // The video track replacement happens automatically via WebRTC ontrack
-      // We just need to update UI — handled in modal via a prop or a separate state
-    };
-
-    const onScreenShareStopped = () => {
-      console.log('🖥️ Remote peer stopped screen sharing');
-    };
-
     const onOffer = async (data: { offer: RTCSessionDescriptionInit; callId: string; senderId: string }) => {
-      const currentCallId = activeCallIdRef.current;
-      if (!currentCallId || currentCallId !== data.callId) return;
-
+      if (!activeCallIdRef.current || activeCallIdRef.current !== data.callId) return;
       const pc = getOrCreatePC(data.senderId, data.callId);
       if (localStreamRef.current) addLocalTracksToPc(pc, localStreamRef.current);
-
       await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
       await drainIceCandidateQueue(pc);
-
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('webrtc:answer', { targetUserId: data.senderId, answer, callId: data.callId });
@@ -374,34 +344,30 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       }
     };
 
-    socket.on('call:initiated',          onInitiated);
-    socket.on('call:incoming',           onIncoming);
-    socket.on('call:accepted',           onAccepted);
-    socket.on('call:declined',           onDeclined);
-    socket.on('call:ended',              onEnded);
-    socket.on('call:cancelled',          onCancelled);
-    socket.on('call:screen-share-started', onScreenShareStarted);
-    socket.on('call:screen-share-stopped', onScreenShareStopped);
-    socket.on('webrtc:offer',            onOffer);
-    socket.on('webrtc:answer',           onAnswer);
-    socket.on('webrtc:ice-candidate',    onIceCandidate);
+    socket.on('call:initiated',            onInitiated);
+    socket.on('call:incoming',             onIncoming);
+    socket.on('call:accepted',             onAccepted);
+    socket.on('call:declined',             onDeclined);
+    socket.on('call:ended',                onEnded);
+    socket.on('call:cancelled',            onCancelled);
+    socket.on('webrtc:offer',              onOffer);
+    socket.on('webrtc:answer',             onAnswer);
+    socket.on('webrtc:ice-candidate',      onIceCandidate);
 
     return () => {
-      socket.off('call:initiated',          onInitiated);
-      socket.off('call:incoming',           onIncoming);
-      socket.off('call:accepted',           onAccepted);
-      socket.off('call:declined',           onDeclined);
-      socket.off('call:ended',              onEnded);
-      socket.off('call:cancelled',          onCancelled);
-      socket.off('call:screen-share-started', onScreenShareStarted);
-      socket.off('call:screen-share-stopped', onScreenShareStopped);
-      socket.off('webrtc:offer',            onOffer);
-      socket.off('webrtc:answer',           onAnswer);
-      socket.off('webrtc:ice-candidate',    onIceCandidate);
+      socket.off('call:initiated',         onInitiated);
+      socket.off('call:incoming',          onIncoming);
+      socket.off('call:accepted',          onAccepted);
+      socket.off('call:declined',          onDeclined);
+      socket.off('call:ended',             onEnded);
+      socket.off('call:cancelled',         onCancelled);
+      socket.off('webrtc:offer',           onOffer);
+      socket.off('webrtc:answer',          onAnswer);
+      socket.off('webrtc:ice-candidate',   onIceCandidate);
     };
   }, [socket, getOrCreatePC, addLocalTracksToPc, drainIceCandidateQueue, cleanupCall, startTimer]);
 
-  // ─── Actions ────────────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
   const initiateCall = async (receiverId: string, callType: CallType) => {
     if (activeCallIdRef.current) return;
     try {
@@ -420,14 +386,12 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       isInitiatorRef.current = false;
       const stream = await getMediaStream(incomingCall.callType);
       activeCallIdRef.current = incomingCall.callId;
-
       const pc = getOrCreatePC(
         incomingCall.caller.id || incomingCall.caller._id || '',
         incomingCall.callId
       );
       addLocalTracksToPc(pc, stream);
       socket?.emit('call:accept', { callId: incomingCall.callId });
-
       setActiveCall({
         _id: incomingCall.callId,
         caller: incomingCall.caller,

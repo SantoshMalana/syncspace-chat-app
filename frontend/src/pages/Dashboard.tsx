@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { workspaceAPI, channelAPI, messageAPI, uploadAPI } from '../utils/api';
-import { initializeSocket, joinWorkspace, joinChannel, leaveChannel, sendTypingStart, sendTypingStop, disconnectSocket, joinThread, leaveThread } from '../utils/socket';
+import { initializeSocket, joinWorkspace, joinChannel, leaveChannel, sendTypingStart, sendTypingStop, disconnectSocket, joinThread, leaveThread, getSocket } from '../utils/socket';
 import type { Workspace, Channel, Message, User, TypingUser } from '../types';
 import MessageItem from '../components/MessageItem';
 import ThreadPanel from '../components/ThreadPanel';
@@ -503,6 +503,17 @@ const Dashboard = () => {
         return msg;
       }));
     });
+
+    socket.on('message:read:update', ({ messageIds, readBy }: { messageIds: string[], readBy: string }) => {
+      setMessages(prev => prev.map(m =>
+        messageIds.includes(m._id)
+          ? {
+            ...m,
+            readBy: [...(m.readBy || []), { userId: readBy, readAt: new Date().toISOString() }]
+          }
+          : m
+      ));
+    });
   };
 
   const selectChannel = async (channel: Channel) => {
@@ -704,6 +715,37 @@ const Dashboard = () => {
       });
     }
   }, [activeChannel, activeDMUser, messages, currentUser]);
+
+  // Mark all visible messages as read via socket
+  useEffect(() => {
+    const socket = getSocket();
+    if (!messages.length || !currentUser || !socket) return;
+
+    const currentUserId = currentUser.id || currentUser._id;
+    const currentChannelId = activeChannel?._id || activeDMUser?._id || activeDMUser?.id;
+
+    const unread = messages
+      .filter(m => {
+        const senderId = typeof m.senderId === 'object' ? m.senderId._id : m.senderId;
+        if (senderId === currentUserId) return false;
+
+        const readByArr = m.readBy || [];
+        const isRead = readByArr.some(r => {
+          const rId = typeof r.userId === 'object' ? r.userId._id : r.userId;
+          return rId === currentUserId;
+        });
+        return !isRead;
+      })
+      .map(m => m._id);
+
+    if (unread.length > 0) {
+      socket.emit('message:read', {
+        messageIds: unread,
+        channelId: currentChannelId,
+        readBy: currentUserId,
+      });
+    }
+  }, [messages, activeChannel, activeDMUser, currentUser]);
 
   // Keyboard shortcut for search modal (Ctrl+K or Cmd+K)
   useEffect(() => {
