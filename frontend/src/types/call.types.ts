@@ -98,6 +98,7 @@ export interface IncomingCallModalProps {
 
 export interface VoiceCallModalProps {
   call: Call;
+  remoteStream: MediaStream | null;
   isMuted: boolean;
   duration: number;
   isConnected: boolean;

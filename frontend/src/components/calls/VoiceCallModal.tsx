@@ -2,13 +2,23 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { VoiceCallModalProps } from '../../types/call.types';
 
 export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
-  call, isMuted, duration, isConnected, isScreenSharing,
+  call, remoteStream, isMuted, duration, isConnected, isScreenSharing,
   onToggleMute, onStartScreenShare, onStopScreenShare, onEndCall,
 }) => {
-  const other = call.caller;
+  const currentUserId = (() => { try { const u = JSON.parse(localStorage.getItem('user') || '{}'); return u.id || u._id || ''; } catch { return ''; } })();
+  const isInitiator = call.caller.id === currentUserId || call.caller._id === currentUserId;
+  const other = isInitiator ? call.receiver : call.caller;
   const displayName = other.fullName || other.name || 'Unknown';
   const initials = displayName.split(' ').filter(Boolean).map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
   const [isPulsing, setIsPulsing] = useState(true);
+
+  // ── Safety-net hidden audio element (CallManager already has the primary one) ──
+  const audioRef = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !remoteStream) return;
+    if (el.srcObject !== remoteStream) { el.srcObject = remoteStream; el.play().catch(() => { }); }
+  }, [remoteStream]);
 
   const fmt = (s: number) => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
@@ -24,6 +34,9 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
 
   return (
     <div className="vcm">
+      {/* Hidden audio safety-net for remote voice */}
+      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+
       {/* Ambient blobs */}
       <div className="vcm-blob vcm-blob-a" />
       <div className="vcm-blob vcm-blob-b" />

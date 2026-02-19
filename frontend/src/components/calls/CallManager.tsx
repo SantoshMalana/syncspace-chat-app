@@ -1,6 +1,6 @@
 // frontend/src/components/calls/CallManager.tsx
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useCallContext } from '../../context/CallContext';
 import { useGroupCallContext } from '../../context/GroupCallContext';
 import { IncomingCallModal } from './IncomingCallModal';
@@ -16,17 +16,37 @@ export const CallManager: React.FC = () => {
     startScreenShare, stopScreenShare,
   } = useCallContext();
 
+  // ── AUDIO FIX: hidden <audio> element that plays the remote stream ──────────
+  // Browser WebRTC does NOT auto-play audio from RTCPeerConnection.
+  // You MUST attach the remoteStream to an <audio> element's srcObject.
+  // Without this, audio tracks arrive but are never sent to speakers.
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const el = remoteAudioRef.current;
+    if (!el) return;
+    if (remoteStream) {
+      if (el.srcObject !== remoteStream) el.srcObject = remoteStream;
+      el.play().catch(err => {
+        // Autoplay blocked — user must interact first; audio will play on next interaction
+        console.warn('Remote audio autoplay blocked:', err.message);
+      });
+    } else {
+      el.srcObject = null;
+    }
+  }, [remoteStream]);
+  // ──────────────────────────────────────────────────────────────────────────
+
   const {
     groupCall, incomingGroupCall,
     localStream: groupLocalStream,
     isMuted: groupIsMuted,
     isVideoEnabled: groupIsVideoEnabled,
-    isScreenSharing: groupIsScreenSharing,       // ✅ NEW
+    isScreenSharing: groupIsScreenSharing,
     joinGroupCall, leaveGroupCall, declineGroupCall,
     toggleMute: groupToggleMute,
     toggleVideo: groupToggleVideo,
-    startScreenShare: groupStartScreenShare,     // ✅ NEW
-    stopScreenShare: groupStopScreenShare,       // ✅ NEW
+    startScreenShare: groupStartScreenShare,
+    stopScreenShare: groupStopScreenShare,
   } = useGroupCallContext();
 
   const isConnected = !!remoteStream;
@@ -40,6 +60,16 @@ export const CallManager: React.FC = () => {
 
   return (
     <>
+      {/* ── Hidden audio element — plays remote voice for ALL call types ── */}
+      {/* This is the CRITICAL piece: without it, WebRTC audio is received  */}
+      {/* by the browser but never routed to the speakers.                  */}
+      <audio
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        style={{ display: 'none' }}
+      />
+
       {/* 1-on-1 Incoming */}
       {incomingCall && !activeCall && (
         <IncomingCallModal
@@ -54,6 +84,7 @@ export const CallManager: React.FC = () => {
       {activeCall && activeCall.callType === 'voice' && (
         <VoiceCallModal
           call={activeCall}
+          remoteStream={remoteStream}
           isMuted={isMuted}
           duration={callDuration}
           isConnected={isConnected}
