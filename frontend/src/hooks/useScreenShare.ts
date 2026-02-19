@@ -18,19 +18,16 @@ interface UseScreenShareProps {
   workspaceId: string;
 }
 
-const getIceServers = () => {
-  return {
-    iceServers: [
-      { urls: 'stun:stun.relay.metered.ca:80' },
-      { urls: 'turn:syncspaceapplication.metered.live:80', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
-      { urls: 'turn:syncspaceapplication.metered.live:80?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
-      { urls: 'turn:syncspaceapplication.metered.live:443', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
-      { urls: 'turn:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
-      { urls: 'turns:syncspaceapplication.metered.live:443?transport=tcp', username: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB', credential: 'E7VM0FVYwGYKfra_mi5be7Ph3N5BR-rHw4MXYRHHhU6pyHfB' },
-    ],
-    iceCandidatePoolSize: 10,
-  };
-};
+const getIceServers = () => ({
+  iceServers: [
+    { urls: 'stun:stun.relay.metered.ca:80' },
+    { urls: 'turn:global.relay.metered.ca:80', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
+    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
+    { urls: 'turn:global.relay.metered.ca:443', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
+    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
+  ],
+  iceCandidatePoolSize: 10,
+});
 
 export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreenShareProps) => {
   const [isHosting, setIsHosting] = useState(false);
