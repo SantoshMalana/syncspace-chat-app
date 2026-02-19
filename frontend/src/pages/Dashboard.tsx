@@ -699,48 +699,50 @@ const Dashboard = () => {
     }
   };
 
-  // Mark messages as read when viewing channel
+  // ── Mark messages as read (HTTP + Socket) ──────────────────────────────────
   useEffect(() => {
-    if ((activeChannel || activeDMUser) && messages.length > 0) {
-      const unreadMessages = messages.filter(msg => {
-        const isOwn = typeof msg.senderId === 'object' ? msg.senderId._id === currentUser?.id : msg.senderId === currentUser?.id;
-        if (isOwn) return false;
-        const readBy = msg.readBy || [];
-        const isRead = readBy.some(r => typeof r.userId === 'string' ? r.userId === currentUser?.id : r.userId._id === currentUser?.id);
-        return !isRead;
-      });
-
-      unreadMessages.forEach(msg => {
-        messageAPI.markAsRead(msg._id).catch(console.error);
-      });
-    }
-  }, [activeChannel, activeDMUser, messages, currentUser]);
-
-  // Mark all visible messages as read via socket
-  useEffect(() => {
+    if (!messages.length || !currentUser) return;
     const socket = getSocket();
-    if (!messages.length || !currentUser || !socket) return;
-
     const currentUserId = currentUser.id || currentUser._id;
+    if (!currentUserId) return;
+
     const currentChannelId = activeChannel?._id || activeDMUser?._id || activeDMUser?.id;
 
-    const unread = messages
-      .filter(m => {
-        const senderId = typeof m.senderId === 'object' ? m.senderId._id : m.senderId;
-        if (senderId === currentUserId) return false;
+    const unread = messages.filter(m => {
+      // Guard: skip messages with no senderId
+      if (!m.senderId) return false;
 
-        const readByArr = m.readBy || [];
-        const isRead = readByArr.some(r => {
-          const rId = typeof r.userId === 'object' ? r.userId._id : r.userId;
-          return rId === currentUserId;
-        });
-        return !isRead;
-      })
-      .map(m => m._id);
+      const senderId = typeof m.senderId === 'object'
+        ? (m.senderId._id || m.senderId.id)
+        : m.senderId;
 
-    if (unread.length > 0) {
+      // Don't mark own messages as read
+      if (senderId === currentUserId) return false;
+
+      // Check if already marked read by current user
+      const readByArr = m.readBy || [];
+      const alreadyRead = readByArr.some(r => {
+        if (!r || !r.userId) return false;
+        const rId = typeof r.userId === 'object'
+          ? (r.userId._id || r.userId.id)
+          : r.userId;
+        return rId === currentUserId;
+      });
+
+      return !alreadyRead;
+    });
+
+    if (!unread.length) return;
+
+    // HTTP mark-as-read (for persistence)
+    unread.forEach(msg => {
+      messageAPI.markAsRead(msg._id).catch(() => { });
+    });
+
+    // Socket emit (for live double-tick updates)
+    if (socket && currentChannelId) {
       socket.emit('message:read', {
-        messageIds: unread,
+        messageIds: unread.map(m => m._id),
         channelId: currentChannelId,
         readBy: currentUserId,
       });
