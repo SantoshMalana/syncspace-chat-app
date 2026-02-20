@@ -33,7 +33,7 @@ exports.sendChannelMessage = async (req, res) => {
 
     // Create message
     const message = new Message({
-      content,
+      content: content || '',
       senderId: userId,
       channelId,
       workspaceId: workspaceId || channel.workspaceId,
@@ -146,7 +146,7 @@ exports.sendDirectMessage = async (req, res) => {
 
     // Create message
     const message = new Message({
-      content,
+      content: content || '',
       senderId,
       recipientId,
       workspaceId,
@@ -417,7 +417,7 @@ exports.markAsRead = async (req, res) => {
     }
 
     // Check if already read
-    const alreadyRead = message.readBy.some(r => r.userId.toString() === userId);
+    const alreadyRead = message.readBy.some(r => r?.userId?.toString() === userId);
 
     if (!alreadyRead) {
       message.readBy.push({
@@ -494,7 +494,7 @@ exports.markAsRead = async (req, res) => {
     }
 
     // Check if already read
-    const alreadyRead = message.readBy.some(r => r.userId.toString() === userId);
+    const alreadyRead = message.readBy.some(r => r?.userId?.toString() === userId);
 
     if (!alreadyRead) {
       message.readBy.push({
@@ -639,7 +639,7 @@ exports.searchMessages = async (req, res) => {
       workspaceId,
       $or: [
         { channelId: { $in: channelIds } },
-        { 
+        {
           messageType: 'direct',
           $or: [
             { senderId: userId },

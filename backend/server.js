@@ -20,6 +20,7 @@ if (missingEnvVars.length > 0) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ── Socket.IO ────────────────────────────────────────────────────────────────
@@ -78,32 +79,32 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
-const apiLimiter  = rateLimit({ windowMs: 1 * 60 * 1000,  max: 100, standardHeaders: true, legacyHeaders: false });
+const apiLimiter = rateLimit({ windowMs: 1 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 
 // ── Routes ───────────────────────────────────────────────────────────────────
-const authRoutes      = require('./routes/authRoutes');
+const authRoutes = require('./routes/authRoutes');
 const workspaceRoutes = require('./routes/workspaceRoutes');
-const channelRoutes   = require('./routes/channelRoutes');
-const messageRoutes   = require('./routes/messageRoutes');
-const uploadRoutes    = require('./routes/uploadRoutes');
-const fixRoutes       = require('./routes/fixRoutes');
-const userRoutes      = require('./routes/userRoutes');
-const meetingRoutes   = require('./routes/meetingRoutes');
-const callRoutes      = require('./routes/callRoutes');
+const channelRoutes = require('./routes/channelRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const fixRoutes = require('./routes/fixRoutes');
+const userRoutes = require('./routes/userRoutes');
+const meetingRoutes = require('./routes/meetingRoutes');
+const callRoutes = require('./routes/callRoutes');
 const screenShareHandlers = require('./socket/screenShareHandlers');
 
-app.use('/api/auth/login',  authLimiter);
+app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api', apiLimiter);
-app.use('/api/auth',       authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/workspaces', workspaceRoutes);
-app.use('/api/channels',   channelRoutes);
-app.use('/api/messages',   messageRoutes);
-app.use('/api/upload',     uploadRoutes);
-app.use('/api/fix',        fixRoutes);
-app.use('/api/users',      userRoutes);
-app.use('/api/meetings',   meetingRoutes);
-app.use('/api/calls',      callRoutes);
+app.use('/api/channels', channelRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/fix', fixRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/meetings', meetingRoutes);
+app.use('/api/calls', callRoutes);
 
 // ── Health check (also acts as keep-alive target) ────────────────────────────
 app.get('/health', (req, res) => {
@@ -132,10 +133,10 @@ if (process.env.NODE_ENV === 'production') {
 
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 const User = require('./models/User');
-const jwt  = require('jsonwebtoken');
-const callHandlers       = require('./socket/callHandlers');
-const meetingHandlers    = require('./socket/meetingHandlers');
-const groupCallHandlers  = require('./socket/groupCallHandlers');
+const jwt = require('jsonwebtoken');
+const callHandlers = require('./socket/callHandlers');
+const meetingHandlers = require('./socket/meetingHandlers');
+const groupCallHandlers = require('./socket/groupCallHandlers');
 
 const onlineUsers = new Map(); // userId → socketId
 
@@ -218,10 +219,10 @@ io.on('connection', (socket) => {
 
   // ── Rooms ──────────────────────────────────────────────────────────────────
   socket.on('workspace:join', id => socket.join(`workspace:${id}`));
-  socket.on('channel:join',   id => socket.join(`channel:${id}`));
-  socket.on('channel:leave',  id => socket.leave(`channel:${id}`));
-  socket.on('thread:join',    id => socket.join(`thread:${id}`));
-  socket.on('thread:leave',   id => socket.leave(`thread:${id}`));
+  socket.on('channel:join', id => socket.join(`channel:${id}`));
+  socket.on('channel:leave', id => socket.leave(`channel:${id}`));
+  socket.on('thread:join', id => socket.join(`thread:${id}`));
+  socket.on('thread:leave', id => socket.leave(`thread:${id}`));
 
   socket.on('screenshare:chat', ({ roomId, text }) => {
     socket.to(`screenshare:${roomId}`).emit('screenshare:chat', {
@@ -247,9 +248,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('message:edit',   (message)            => io.to(`channel:${message.channelId}`).emit('message:updated', message));
+  socket.on('message:edit', (message) => io.to(`channel:${message.channelId}`).emit('message:updated', message));
   socket.on('message:delete', ({ messageId, channelId }) => io.to(`channel:${channelId}`).emit('message:deleted', { messageId }));
-  socket.on('reaction:add',   ({ messageId, channelId, reaction }) => io.to(`channel:${channelId}`).emit('reaction:updated', { messageId, reaction }));
+  socket.on('reaction:add', ({ messageId, channelId, reaction }) => io.to(`channel:${channelId}`).emit('reaction:updated', { messageId, reaction }));
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', async () => {
