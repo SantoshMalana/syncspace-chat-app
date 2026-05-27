@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { User } from '../types';
+import { optimizeCloudinaryUrl } from '../utils/cloudinary';
 
 interface ProfilePanelProps {
   user: User;
@@ -214,7 +215,7 @@ const ProfilePanel = ({ user, currentUser, onClose, onMessage, onProfileUpdate }
               ) : isEmoji ? (
                 <span className="text-5xl">{user.avatar}</span>
               ) : avatarUrl ? (
-                <img src={avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                <img src={optimizeCloudinaryUrl(avatarUrl, 96, 96)} alt={user.fullName} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-2xl font-bold">{getInitials(user.fullName)}</span>
               )}

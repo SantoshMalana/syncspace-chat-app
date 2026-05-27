@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Message, User } from '../types';
 import MessageActions from './MessageActions';
 import EmojiPickerComponent from './EmojiPickerComponent';
+import { optimizeCloudinaryUrl } from '../utils/cloudinary';
 
 interface MessageItemProps {
   message: Message;
@@ -196,7 +197,7 @@ const MessageItem = ({
       >
         <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold bg-gradient-to-br from-violet-500 to-indigo-600 hover:opacity-85 transition-opacity">
           {sender?.avatar ? (
-            <img src={sender.avatar} alt={sender.fullName} className="w-full h-full object-cover" />
+            <img src={optimizeCloudinaryUrl(sender.avatar, 40, 40)} alt={sender.fullName} className="w-full h-full object-cover" />
           ) : (
             getInitials(sender?.fullName || 'U')
           )}
@@ -288,7 +289,7 @@ const MessageItem = ({
               if (isImage) return (
                 <div key={i} className="relative group/img inline-block">
                   <img
-                    src={url}
+                    src={optimizeCloudinaryUrl(url, 400, 400, 'limit')}
                     alt={attachment.filename}
                     className="max-w-xs max-h-64 rounded-xl border border-[#2a2a2a] object-cover cursor-pointer hover:opacity-95 transition-opacity"
                     onClick={() => window.open(url, '_blank')}
