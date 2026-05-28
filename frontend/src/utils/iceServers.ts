@@ -27,7 +27,7 @@ export const getIceServers = async (): Promise<RTCConfiguration> => {
   }
 
   try {
-    const res = await fetch(`https://syncspace.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`);
+    const res = await fetch(`https://syncspaceapplication.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`);
     if (!res.ok) throw new Error(`Metered API returned ${res.status}`);
     const iceServers = await res.json();
     cachedConfig = { iceServers, iceCandidatePoolSize: 10 };
