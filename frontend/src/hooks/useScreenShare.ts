@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
+import { getIceServers } from '../utils/iceServers';
 
 export interface ScreenShareRoom {
   roomId: string;
@@ -18,16 +19,7 @@ interface UseScreenShareProps {
   workspaceId: string;
 }
 
-const getIceServers = () => ({
-  iceServers: [
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:global.relay.metered.ca:80', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turn:global.relay.metered.ca:443', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-  ],
-  iceCandidatePoolSize: 10,
-});
+
 
 export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreenShareProps) => {
   const [isHosting, setIsHosting] = useState(false);
@@ -118,10 +110,11 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
   }, [socket, cleanup]);
 
   // ─── Host: create PC for a viewer ────────────────────────────────────────
-  const createViewerPC = useCallback((viewerId: string, roomId: string): RTCPeerConnection => {
+  const createViewerPC = useCallback(async (viewerId: string, roomId: string): Promise<RTCPeerConnection> => {
     if (viewerPCsRef.current.has(viewerId)) return viewerPCsRef.current.get(viewerId)!;
 
-    const pc = new RTCPeerConnection(getIceServers());
+    const iceConfig = await getIceServers();
+    const pc = new RTCPeerConnection(iceConfig);
     viewerPCsRef.current.set(viewerId, pc);
     iceCandidateQueues.current.set(viewerId, []);
 
@@ -199,7 +192,7 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
     // Host: new viewer joined — send them an offer
     const onViewerJoined = async (data: { viewerId: string; viewerName: string; roomId: string }) => {
       console.log('👤 Viewer joined, sending offer to:', data.viewerName);
-      const pc = createViewerPC(data.viewerId, data.roomId);
+      const pc = await createViewerPC(data.viewerId, data.roomId);
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -214,7 +207,8 @@ export const useScreenShare = ({ socket, currentUserId, workspaceId }: UseScreen
     const onOffer = async (data: { offer: RTCSessionDescriptionInit; roomId: string; hostId: string }) => {
       console.log('📥 Received offer from host, creating answer...');
       try {
-        const pc = new RTCPeerConnection(getIceServers());
+        const iceConfig = await getIceServers();
+        const pc = new RTCPeerConnection(iceConfig);
         viewerPCRef.current = pc;
 
         pc.ontrack = (e) => {

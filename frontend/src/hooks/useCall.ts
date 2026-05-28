@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import type { Call, CallContextType, CallType, IncomingCall } from '../types/call.types';
+import { getIceServers } from '../utils/iceServers';
 
 interface UseCallProps {
   socket: Socket | null;
@@ -11,19 +12,7 @@ interface UseCallProps {
   workspaceId: string;
 }
 
-// ── ICE config ────────────────────────────────────────────────────────────────
-// Uses Metered.ca free tier. Set VITE_METERED_API_KEY in your .env
-// Get key at: https://dashboard.metered.ca → Apps → Your App → TURN credentials
-const getIceServers = () => ({
-  iceServers: [
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:global.relay.metered.ca:80', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turn:global.relay.metered.ca:443', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-  ],
-  iceCandidatePoolSize: 10,
-});
+
 
 export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): CallContextType => {
   const [activeCall, setActiveCall] = useState<Call | null>(null);
@@ -85,10 +74,11 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
     }, 1000);
   }, []);
 
-  const getOrCreatePC = useCallback((targetUserId: string, callId: string): RTCPeerConnection => {
+  const getOrCreatePC = useCallback(async (targetUserId: string, callId: string): Promise<RTCPeerConnection> => {
     if (pcRef.current) return pcRef.current;
 
-    const pc = new RTCPeerConnection(getIceServers());
+    const iceConfig = await getIceServers();
+    const pc = new RTCPeerConnection(iceConfig);
     pcRef.current = pc;
     targetUserIdRef.current = targetUserId;
 
@@ -275,7 +265,7 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       activeCallIdRef.current = call._id;
       startTimer();
       const receiverId = call.receiver._id || call.receiver.id || '';
-      const pc = getOrCreatePC(receiverId, call._id);
+      const pc = await getOrCreatePC(receiverId, call._id);
       if (localStreamRef.current) addLocalTracksToPc(pc, localStreamRef.current);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -288,7 +278,7 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
 
     const onOffer = async (data: { offer: RTCSessionDescriptionInit; callId: string; senderId: string }) => {
       if (!activeCallIdRef.current || activeCallIdRef.current !== data.callId) return;
-      const pc = getOrCreatePC(data.senderId, data.callId);
+      const pc = await getOrCreatePC(data.senderId, data.callId);
       if (localStreamRef.current) addLocalTracksToPc(pc, localStreamRef.current);
       await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
       await drainIceCandidateQueue(pc);
@@ -359,7 +349,7 @@ export const useCall = ({ socket, currentUserId, workspaceId }: UseCallProps): C
       isInitiatorRef.current = false;
       const stream = await getMediaStream(incomingCall.callType);
       activeCallIdRef.current = incomingCall.callId;
-      const pc = getOrCreatePC(
+      const pc = await getOrCreatePC(
         incomingCall.caller.id || incomingCall.caller._id || '',
         incomingCall.callId
       );

@@ -7,6 +7,7 @@ import type {
   GroupCallState, GroupCallParticipant, IncomingGroupCall,
   GroupCallContextType, CallType,
 } from '../types/call.types';
+import { getIceServers } from '../utils/iceServers';
 
 interface UseGroupCallProps {
   socket: Socket | null;
@@ -15,16 +16,7 @@ interface UseGroupCallProps {
   currentUserAvatar?: string;
 }
 
-const getIceServers = () => ({
-  iceServers: [
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:global.relay.metered.ca:80', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turn:global.relay.metered.ca:443', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-    { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: '688db3a0eba94c053aff3e10', credential: 'LJN/REElJ9A4JEFM' },
-  ],
-  iceCandidatePoolSize: 10,
-});
+
 
 export const useGroupCall = ({
   socket, currentUserId, currentUserName, currentUserAvatar,
@@ -82,10 +74,11 @@ export const useGroupCall = ({
   };
 
   // ── Peer connection ────────────────────────────────────────────────────
-  const createPeerConnection = useCallback((peerId: string, channelId: string, callId: string): RTCPeerConnection => {
+  const createPeerConnection = useCallback(async (peerId: string, channelId: string, callId: string): Promise<RTCPeerConnection> => {
     if (peersRef.current.has(peerId)) return peersRef.current.get(peerId)!;
 
-    const pc = new RTCPeerConnection(getIceServers());
+    const iceConfig = await getIceServers();
+    const pc = new RTCPeerConnection(iceConfig);
     peersRef.current.set(peerId, pc);
     iceCandidateQueues.current.set(peerId, []);
 
@@ -251,7 +244,7 @@ export const useGroupCall = ({
         if (prev.participants.some(p => p.userId === newPeer.userId)) return prev;
         return { ...prev, participants: [...prev.participants, newPeer] };
       });
-      const pc = createPeerConnection(newPeer.userId, channelId, callId);
+      const pc = await createPeerConnection(newPeer.userId, channelId, callId);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('group-call:offer', { targetUserId: newPeer.userId, offer, callId, channelId });
@@ -260,7 +253,7 @@ export const useGroupCall = ({
     const onOffer = async (data: { offer: RTCSessionDescriptionInit; callId: string; channelId: string; senderId: string }) => {
       const call = groupCallRef.current;
       if (!call || call.callId !== data.callId) return;
-      const pc = createPeerConnection(data.senderId, data.channelId, data.callId);
+      const pc = await createPeerConnection(data.senderId, data.channelId, data.callId);
       await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
       await drainIceQueue(pc, data.senderId);
       const answer = await pc.createAnswer();
